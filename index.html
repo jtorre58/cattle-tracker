@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ranch Tracker</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <h1>Ranch Tracker</h1>
+        <nav>
+            <button id="addAnimalBtn" class="btn-primary">Add Animal</button>
+            <button id="uploadCsvBtn" class="btn-secondary">Upload Pariciones CSV</button>
+            <select id="animalTypeFilter">
+                <option value="all">All Animals</option>
+                <option value="cattle">Cattle</option>
+                <option value="horse">Horses</option>
+                <option value="donkey">Donkeys</option>
+            </select>
+        </nav>
+    </header>
+
+    <main>
+        <section class="dashboard">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Total Animals</h3>
+                    <span id="totalCount">0</span>
+                </div>
+                <div class="stat-card">
+                    <h3>Males</h3>
+                    <span id="maleCount">0</span>
+                </div>
+                <div class="stat-card">
+                    <h3>Females</h3>
+                    <span id="femaleCount">0</span>
+                </div>
+                <div class="stat-card">
+                    <h3>Recent Activity</h3>
+                    <span id="recentActivity">0</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="animals-section">
+            <h2>Animals</h2>
+            <div id="animalsList" class="animals-grid"></div>
+        </section>
+
+        <section class="pariciones-section">
+            <h2>Pariciones (Births)</h2>
+            <div class="pariciones-filters">
+                <select id="yearFilter">
+                    <option value="all">All Years</option>
+                </select>
+                <select id="monthFilter">
+                    <option value="all">All Months</option>
+                    <option value="1">January</option>
+                    <option value="2">February</option>
+                    <option value="3">March</option>
+                    <option value="4">April</option>
+                    <option value="5">May</option>
+                    <option value="6">June</option>
+                    <option value="7">July</option>
+                    <option value="8">August</option>
+                    <option value="9">September</option>
+                    <option value="10">October</option>
+                    <option value="11">November</option>
+                    <option value="12">December</option>
+                </select>
+                <input type="date" id="dateFromFilter" placeholder="From Date">
+                <input type="date" id="dateToFilter" placeholder="To Date">
+                <button id="clearFilters" class="btn-secondary">Clear Filters</button>
+            </div>
+            <div id="paricionesList" class="pariciones-grid"></div>
+        </section>
+
+        <section class="recent-activity">
+            <h2>Recent Activity</h2>
+            <div id="activityLog" class="activity-list"></div>
+        </section>
+    </main>
+
+    <!-- Add Animal Modal -->
+    <div id="addAnimalModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Add New Animal</h2>
+            <form id="addAnimalForm">
+                <div class="form-group">
+                    <label for="animalType">Animal Type:</label>
+                    <select id="animalType" required>
+                        <option value="cattle">Cattle</option>
+                        <option value="horse">Horse</option>
+                        <option value="donkey">Donkey</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="tagNumber">Tag/ID Number:</label>
+                    <input type="text" id="tagNumber" required>
+                </div>
+                <div class="form-group">
+                    <label for="name">Name (Optional):</label>
+                    <input type="text" id="name">
+                </div>
+                <div class="form-group">
+                    <label for="gender">Gender:</label>
+                    <select id="gender" required>
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="birthDate">Birth Date:</label>
+                    <input type="date" id="birthDate">
+                </div>
+                <div class="form-group">
+                    <label for="breed">Breed:</label>
+                    <input type="text" id="breed">
+                </div>
+                <div class="form-group">
+                    <label for="weight">Weight (lbs):</label>
+                    <input type="number" id="weight">
+                </div>
+                <div class="form-group">
+                    <label for="motherId">Mother ID:</label>
+                    <select id="motherId">
+                        <option value="">Select Mother</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="notes">Notes:</label>
+                    <textarea id="notes" rows="3"></textarea>
+                </div>
+                <button type="submit" class="btn-primary">Add Animal</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Animal Details Modal -->
+    <div id="animalDetailsModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <div id="animalDetails"></div>
+        </div>
+    </div>
+
+    <!-- CSV Upload Modal -->
+    <div id="csvUploadModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Upload Pariciones CSV</h2>
+            <div class="upload-area">
+                <input type="file" id="csvFileInput" accept=".csv" style="display: none;">
+                <div id="dropZone" class="drop-zone">
+                    <p>Drag and drop CSV file here or click to select</p>
+                    <button type="button" class="btn-secondary">Choose File</button>
+                </div>
+            </div>
+            <div id="csvPreview" class="csv-preview" style="display: none;">
+                <h3>Preview:</h3>
+                <div id="duplicateInfo" class="duplicate-info"></div>
+                <table id="previewTable"></table>
+                <button id="confirmUpload" class="btn-primary">Confirm Upload</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

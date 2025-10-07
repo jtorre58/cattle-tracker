@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ranch Tracker - Vue</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <header>
+            <div class="header-content">
+                <h1>🐄 Sistema de Gestión Ganadera</h1>
+                
+                <!-- Tab Navigation -->
+                <div class="tab-navigation">
+                    <button @click="activeTab = 'pariciones'" :class="['tab-btn', { active: activeTab === 'pariciones' }]">
+                        📊 Pariciones
+                    </button>
+                    <button @click="activeTab = 'ganado'" :class="['tab-btn', { active: activeTab === 'ganado' }]">
+                        🐮 Cuenta de Ganado
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Action Bar -->
+            <div class="action-bar">
+                <div class="action-section">
+                    <h3>➕ Agregar</h3>
+                    <div class="action-buttons">
+                        <button v-if="activeTab === 'pariciones'" @click="showAddAnimal = true" class="btn-primary">
+                            🐄 Nuevo Animal
+                        </button>
+                        <button v-if="activeTab === 'ganado'" @click="showAddGanado = true" class="btn-primary">
+                            🐮 Nuevo Ganado
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="action-section">
+                    <h3>📥 Importar</h3>
+                    <div class="action-buttons">
+                        <button v-if="activeTab === 'pariciones'" @click="showCsvUpload = true" class="btn-import">
+                            📄 Subir CSV
+                        </button>
+                        <button v-if="activeTab === 'pariciones'" @click="showSpreadsheetImport = true" class="btn-import">
+                            📋 Desde Hoja
+                        </button>
+                        <button v-if="activeTab === 'ganado'" @click="showGanadoImport = true" class="btn-import">
+                            📊 Importar Ganado
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="action-section">
+                    <h3>🔍 Filtrar</h3>
+                    <div class="action-buttons">
+                        <select v-if="activeTab === 'pariciones'" v-model="animalFilter" @change="filterAnimals" class="filter-select">
+                            <option value="all">Todos los Animales</option>
+                            <option value="cattle">Ganado</option>
+                            <option value="horse">Caballos</option>
+                            <option value="donkey">Burros</option>
+                        </select>
+                        <select v-if="activeTab === 'ganado'" v-model="ganadoFilter" class="filter-select">
+                            <option value="all">Todos</option>
+                            <option value="V">Vacas</option>
+                            <option value="T">Toros</option>
+                            <option value="B">Becerras</option>
+                            <option value="_B">Becerros</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="action-section">
+                    <h3>💾 Datos</h3>
+                    <div class="action-buttons">
+                        <button @click="exportData" class="btn-export">
+                            📤 Exportar
+                        </button>
+                        <button @click="$refs.importFile.click()" class="btn-export">
+                            📥 Importar
+                        </button>
+                        <input type="file" ref="importFile" @change="importData" accept=".json" style="display: none;">
+                        <button @click="clearAllData" class="btn-danger">
+                            🗑️ {{ activeTab === 'pariciones' ? 'Limpiar Pariciones' : 'Limpiar Ganado' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <!-- Dashboard -->
+            <section class="dashboard">
+                <div class="stats-grid">
+                    <template v-if="activeTab === 'pariciones'">
+                        <div class="stat-card">
+                            <h3>🐄 Total Animales</h3>
+                            <span>{{ activeAnimals.length }}</span>
+                        </div>
+                        <div class="stat-card">
+                            <h3>♂️ Machos</h3>
+                            <span>{{ maleCount }}</span>
+                        </div>
+                        <div class="stat-card">
+                            <h3>♀️ Hembras</h3>
+                            <span>{{ femaleCount }}</span>
+                        </div>
+                        <div class="stat-card">
+                            <h3>📊 Total Pariciones</h3>
+                            <span>{{ filteredPariciones.length }}</span>
+                        </div>
+                        <div class="stat-card">
+                            <h3>👶 Pariciones Machos</h3>
+                            <span>{{ paricionesMales }}</span>
+                        </div>
+                        <div class="stat-card">
+                            <h3>👶 Pariciones Hembras</h3>
+                            <span>{{ paricionesHembras }}</span>
+                        </div>
+                    </template>
+                    
+                    <template v-if="activeTab === 'ganado'">
+                        <div class="stat-card highlight">
+                            <h3>📈 Total Histórico</h3>
+                            <span>{{ ganadoTotalHistorico }}</span>
+                        </div>
+                        <div class="stat-card">
+                            <h3>♀️ Hembras (H)</h3>
+                            <span>{{ ganadoHembrasTotal }}</span>
+                        </div>
+                        <div class="stat-card">
+                            <h3>♂️ Machos (M)</h3>
+                            <span>{{ ganadoMachosTotal }}</span>
+                        </div>
+                        <div class="stat-card">
+                            <h3>👶 Crías Nacidas</h3>
+                            <span>{{ ganadoCriasNacidas }}</span>
+                        </div>
+                        <div class="stat-card success">
+                            <h3>🐄 Vacas Vivas</h3>
+                            <span>{{ ganadoVacasVivas }}</span>
+                        </div>
+                        <div class="stat-card success">
+                            <h3>🐂 Toros Vivos</h3>
+                            <span>{{ ganadoTorosVivos }}</span>
+                        </div>
+                        <div class="stat-card success">
+                            <h3>🐮 Becerras Vivas</h3>
+                            <span>{{ ganadoBecerrasVivas }}</span>
+                        </div>
+                        <div class="stat-card highlight">
+                            <h3>💰 Total Neto</h3>
+                            <span>{{ ganadoTotalNeto }}</span>
+                        </div>
+                        <div class="stat-card danger">
+                            <h3>💀 Vacas Muertas/Vendidas</h3>
+                            <span>{{ ganadoVacasMuertas }}</span>
+                        </div>
+                        <div class="stat-card danger">
+                            <h3>💀 Becerras Muertas</h3>
+                            <span>{{ ganadoBecerrasMuertas }}</span>
+                        </div>
+                        <div class="stat-card warning">
+                            <h3>📉 Total a Rebajar Hembras</h3>
+                            <span>{{ ganadoTotalRebajarHembras }}</span>
+                        </div>
+                        <div class="stat-card danger">
+                            <h3>💸 Toros Vendidos</h3>
+                            <span>{{ ganadoTorosVendidos }}</span>
+                        </div>
+                        <div class="stat-card danger">
+                            <h3>📊 Total Muertos/Vendidos</h3>
+                            <span>{{ ganadoTotalMuertosVendidos }}</span>
+                        </div>
+                    </template>
+                </div>
+            </section>
+
+            <!-- Animals Section -->
+            <section class="animals-section">
+                <h2>Animals</h2>
+                <div class="animals-grid">
+                    <div v-for="animal in filteredAnimals" :key="animal.id" class="animal-card" @click="showAnimalDetails(animal)">
+                        <div class="animal-header">
+                            <div class="animal-id">#{{ animal.tagNumber }}</div>
+                            <div class="animal-type">{{ animal.type }}</div>
+                        </div>
+                        <div class="animal-info">
+                            <div class="animal-name">{{ animal.name || 'Unnamed' }}</div>
+                            <div class="animal-gender">{{ animal.gender }}</div>
+                            <div class="animal-age">{{ calculateAge(animal.birthDate) }}</div>
+                        </div>
+                        <div class="animal-actions">
+                            <button @click.stop="updateAnimalStatus(animal.id, 'sold')" class="btn-secondary btn-success">Mark Sold</button>
+                            <button @click.stop="updateAnimalStatus(animal.id, 'deceased')" class="btn-secondary btn-danger">Mark Deceased</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Pariciones Section -->
+            <section class="pariciones-section">
+                <h2>Pariciones (Births)</h2>
+                <div class="pariciones-filters">
+                    <select v-model="yearFilter">
+                        <option value="all">All Years</option>
+                        <option v-for="year in availableYears" :key="year" :value="year">{{ year }}</option>
+                    </select>
+                    <select v-model="monthFilter">
+                        <option value="all">All Months</option>
+                        <option value="1">January</option>
+                        <option value="2">February</option>
+                        <option value="3">March</option>
+                        <option value="4">April</option>
+                        <option value="5">May</option>
+                        <option value="6">June</option>
+                        <option value="7">July</option>
+                        <option value="8">August</option>
+                        <option value="9">September</option>
+                        <option value="10">October</option>
+                        <option value="11">November</option>
+                        <option value="12">December</option>
+                    </select>
+                    <input type="date" v-model="dateFrom" placeholder="From Date">
+                    <input type="date" v-model="dateTo" placeholder="To Date">
+                    <button @click="clearFilters" class="btn-secondary">Clear Filters</button>
+                </div>
+                <div class="pariciones-grid">
+                    <div v-for="paricion in filteredPariciones" :key="paricion.id" class="paricion-card" @click="editParicion(paricion)">
+                        <div v-if="paricion.image" class="record-image">
+                            <img :src="paricion.image" alt="Parición" style="width: 100%; max-height: 120px; object-fit: cover; border-radius: 8px; margin-bottom: 0.5rem;">
+                        </div>
+                        <h4>{{ paricion.vaca }}</h4>
+                        <div class="paricion-date">{{ paricion.fecha }}</div>
+                        <div :class="['paricion-gender', paricion.gender.toLowerCase() === 'h' ? 'female' : 'male']">
+                            {{ paricion.gender.toUpperCase() === 'H' ? 'Hembra' : 'Macho' }}
+                        </div>
+                        <div v-if="paricion.notes" class="paricion-notes">{{ paricion.notes }}</div>
+                        <div class="edit-hint">Click para editar</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Ganado Section -->
+            <section v-if="activeTab === 'ganado'" class="ganado-section">
+                <h2>Cuenta de Ganado</h2>
+                <div class="ganado-grid">
+                    <div v-for="ganado in filteredGanado" :key="ganado.id" class="ganado-card" @click="editGanadoRecord(ganado)">
+                        <div v-if="ganado.image" class="record-image">
+                            <img :src="ganado.image" alt="Ganado" style="width: 100%; max-height: 120px; object-fit: cover; border-radius: 8px; margin-bottom: 0.5rem;">
+                        </div>
+                        <h4>{{ ganado.animal }}</h4>
+                        <div class="ganado-info">
+                            <span class="ganado-origen">{{ ganado.origen }}</span>
+                            <span :class="['ganado-type', ganado.tipo]">{{ ganado.tipo }}</span>
+                            <span :class="['ganado-gender', ganado.gender === 'H' ? 'female' : 'male']">
+                                {{ ganado.gender }}
+                            </span>
+                        </div>
+                        <div v-if="ganado.fechas" class="ganado-date">{{ ganado.fechas }}</div>
+                        <div v-if="ganado.comentarios" class="ganado-comments">{{ ganado.comentarios }}</div>
+                        <div v-if="ganado.notas" class="ganado-notes">{{ ganado.notas }}</div>
+                        <div :class="['ganado-status', ganado.muerto_vendido === 'S' ? 'dead-sold' : 'alive']">
+                            {{ ganado.muerto_vendido === 'S' ? 'Muerto/Vendido' : 'Vivo' }}
+                        </div>
+                        <div class="edit-hint">Click para editar</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Recent Activity -->
+            <section class="recent-activity">
+                <h2>Recent Activity</h2>
+                <div class="activity-list">
+                    <div v-for="activity in recentActivities" :key="activity.id" class="activity-item">
+                        <div class="activity-text">{{ activity.description }}</div>
+                        <div class="activity-time">{{ formatDate(activity.timestamp) }}</div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Add Animal Modal -->
+        <div v-if="showAddAnimal" class="modal" style="display: block;" @click.self="showAddAnimal = false">
+            <div class="modal-content">
+                <span class="close" @click="showAddAnimal = false">&times;</span>
+                <h2>Add New Animal</h2>
+                <form @submit.prevent="addAnimal">
+                    <div class="form-group">
+                        <label>Animal Type:</label>
+                        <select v-model="newAnimal.type" required>
+                            <option value="cattle">Cattle</option>
+                            <option value="horse">Horse</option>
+                            <option value="donkey">Donkey</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Tag/ID Number:</label>
+                        <input type="text" v-model="newAnimal.tagNumber" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Name (Optional):</label>
+                        <input type="text" v-model="newAnimal.name">
+                    </div>
+                    <div class="form-group">
+                        <label>Gender:</label>
+                        <select v-model="newAnimal.gender" required>
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Birth Date:</label>
+                        <input type="date" v-model="newAnimal.birthDate">
+                    </div>
+                    <div class="form-group">
+                        <label>Breed:</label>
+                        <input type="text" v-model="newAnimal.breed">
+                    </div>
+                    <div class="form-group">
+                        <label>Weight (lbs):</label>
+                        <input type="number" v-model="newAnimal.weight">
+                    </div>
+                    <div class="form-group">
+                        <label>Notes:</label>
+                        <textarea v-model="newAnimal.notes" rows="3"></textarea>
+                    </div>
+                    <button type="submit" class="btn-primary">Add Animal</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Add/Edit Paricion Modal -->
+        <div v-if="showAddParicion" class="modal" style="display: block;" @click.self="showAddParicion = false">
+            <div class="modal-content">
+                <span class="close" @click="showAddParicion = false">&times;</span>
+                <h2>{{ editingParicion ? 'Editar' : 'Agregar' }} Parición</h2>
+                <form @submit.prevent="saveParicion">
+                    <div class="form-group">
+                        <label>Vaca:</label>
+                        <input type="text" v-model="currentParicion.vaca" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Género:</label>
+                        <select v-model="currentParicion.gender" required>
+                            <option value="H">Hembra (H)</option>
+                            <option value="M">Macho (M)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Fecha (MM/YY):</label>
+                        <input type="text" v-model="currentParicion.fecha" placeholder="08/23" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Notas:</label>
+                        <textarea v-model="currentParicion.notes" rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Foto:</label>
+                        <input type="file" @change="handleParicionImage" accept="image/*">
+                        <div v-if="currentParicion.image" class="image-preview">
+                            <img :src="currentParicion.image" alt="Preview" style="max-width: 200px; max-height: 150px; border-radius: 8px;">
+                            <button type="button" @click="removeParicionImage" class="btn-danger btn-small">Eliminar Foto</button>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-primary">{{ editingParicion ? 'Actualizar' : 'Agregar' }} Parición</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Add Ganado Modal -->
+        <div v-if="showAddGanado" class="modal" style="display: block;" @click.self="showAddGanado = false">
+            <div class="modal-content">
+                <span class="close" @click="showAddGanado = false">&times;</span>
+                <h2>{{ editingGanado ? 'Editar' : 'Agregar' }} Ganado</h2>
+                <form @submit.prevent="addGanado">
+                    <div class="form-group">
+                        <label>Animal:</label>
+                        <input type="text" v-model="newGanado.animal" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Origen:</label>
+                        <input type="text" v-model="newGanado.origen" placeholder="Mama, Tio Juan, etc.">
+                    </div>
+                    <div class="form-group">
+                        <label>Comentarios:</label>
+                        <input type="text" v-model="newGanado.comentarios">
+                    </div>
+                    <div class="form-group">
+                        <label>Gender (H/M):</label>
+                        <select v-model="newGanado.gender" required>
+                            <option value="H">Hembra (H)</option>
+                            <option value="M">Macho (M)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Tipo (V/T/B/_B):</label>
+                        <select v-model="newGanado.tipo" required>
+                            <option value="V">Vaca (V)</option>
+                            <option value="T">Toro (T)</option>
+                            <option value="B">Becerra (B)</option>
+                            <option value="_B">Becerro (_B)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Fechas:</label>
+                        <input type="text" v-model="newGanado.fechas" placeholder="MM/DD/YYYY">
+                    </div>
+                    <div class="form-group">
+                        <label>Muerto/Vendido:</label>
+                        <select v-model="newGanado.muerto_vendido">
+                            <option value="N">No (N)</option>
+                            <option value="S">Si (S)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Notas:</label>
+                        <textarea v-model="newGanado.notas" rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Foto:</label>
+                        <input type="file" @change="handleGanadoImage" accept="image/*">
+                        <div v-if="newGanado.image" class="image-preview">
+                            <img :src="newGanado.image" alt="Preview" style="max-width: 200px; max-height: 150px; border-radius: 8px;">
+                            <button type="button" @click="removeGanadoImage" class="btn-danger btn-small">Eliminar Foto</button>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-primary">{{ editingGanado ? 'Actualizar' : 'Agregar' }} Ganado</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Import Ganado Modal -->
+        <div v-if="showGanadoImport" class="modal" style="display: block;" @click.self="showGanadoImport = false">
+            <div class="modal-content">
+                <span class="close" @click="showGanadoImport = false">&times;</span>
+                <h2>Import Ganado Data</h2>
+                <div class="import-instructions">
+                    <h3>Instructions:</h3>
+                    <ol>
+                        <li>Copy your ganado data from spreadsheet</li>
+                        <li>Paste in the box below</li>
+                        <li>Format: Animal, Origen, Comentarios, H/M, V/T/B/_B, Fechas, Muerto/Vendio(S/N), Notas</li>
+                    </ol>
+                </div>
+                <div class="form-group">
+                    <label>Paste ganado data here:</label>
+                    <textarea v-model="ganadoData" rows="10" placeholder="Paste your ganado data here..." class="spreadsheet-textarea"></textarea>
+                </div>
+                <div class="form-actions">
+                    <button @click="parseGanadoData" class="btn-secondary">Preview Data</button>
+                </div>
+                <div v-if="ganadoPreview.length > 0" class="import-preview">
+                    <h3>Preview ({{ ganadoPreview.length }} records):</h3>
+                    <table class="preview-table">
+                        <thead>
+                            <tr>
+                                <th>Animal</th>
+                                <th>Origen</th>
+                                <th>H/M</th>
+                                <th>Tipo</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="item in ganadoPreview.slice(0, 10)" :key="item.id">
+                                <td>{{ item.animal }}</td>
+                                <td>{{ item.origen }}</td>
+                                <td>{{ item.gender }}</td>
+                                <td>{{ item.tipo }}</td>
+                                <td>{{ item.muerto_vendido === 'S' ? 'Muerto/Vendido' : 'Vivo' }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <button @click="processGanadoData" class="btn-primary">Import {{ ganadoPreview.length }} Records</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Spreadsheet Import Modal -->
+        <div v-if="showSpreadsheetImport" class="modal" style="display: block;" @click.self="showSpreadsheetImport = false">
+            <div class="modal-content">
+                <span class="close" @click="showSpreadsheetImport = false">&times;</span>
+                <h2>Import from Google Spreadsheet</h2>
+                <div class="import-instructions">
+                    <h3>Instructions:</h3>
+                    <ol>
+                        <li>Open your Google Sheet: <a href="https://docs.google.com/spreadsheets/d/1V4ABnJIgG6PEReyHCqeMooYu6JWOA0Ko/edit" target="_blank">Open Sheet</a></li>
+                        <li>Select all data (Ctrl+A or Cmd+A)</li>
+                        <li>Copy (Ctrl+C or Cmd+C)</li>
+                        <li>Paste in the box below</li>
+                    </ol>
+                </div>
+                <div class="form-group">
+                    <label>Paste spreadsheet data here:</label>
+                    <textarea v-model="spreadsheetData" rows="10" placeholder="Paste your spreadsheet data here..." class="spreadsheet-textarea"></textarea>
+                </div>
+                <div v-if="importPreview.length > 0" class="import-preview">
+                    <h3>Preview ({{ importPreview.length }} records):</h3>
+                    <div :class="['duplicate-info', importDuplicates.length > 0 ? 'has-duplicates' : 'no-duplicates']">
+                        <span v-if="importDuplicates.length > 0">
+                            ⚠️ {{ importDuplicates.length }} duplicates found
+                        </span>
+                        <span v-else>
+                            ✅ No duplicates found. {{ importPreview.length }} new records will be added.
+                        </span>
+                    </div>
+                    <table class="preview-table">
+                        <thead>
+                            <tr>
+                                <th>Vaca</th>
+                                <th>Gender</th>
+                                <th>Fecha</th>
+                                <th>Notes</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="item in importPreview.slice(0, 10)" :key="item.id" :style="isImportDuplicate(item) ? 'background-color: #f8d7da;' : (item.warning ? 'background-color: #fff3cd;' : '')">
+                                <td>{{ item.vaca }}</td>
+                                <td>{{ item.gender }}</td>
+                                <td>{{ item.fecha }}</td>
+                                <td>{{ item.notes }}</td>
+                                <td>
+                                    <span v-if="isImportDuplicate(item)" class="status-duplicate">Duplicate</span>
+                                    <span v-else-if="item.warning" class="status-warning">⚠️ {{ item.warning }}</span>
+                                    <span v-else class="status-new">New</span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p v-if="importPreview.length > 10">... and {{ importPreview.length - 10 }} more records</p>
+                    <button @click="processSpreadsheetData" class="btn-primary">Import {{ importPreview.length - importDuplicates.length }} New Records</button>
+                </div>
+                <div class="form-actions">
+                    <button @click="parseSpreadsheetData" class="btn-secondary">Preview Data</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- CSV Upload Modal -->
+        <div v-if="showCsvUpload" class="modal" style="display: block;" @click.self="showCsvUpload = false">
+            <div class="modal-content">
+                <span class="close" @click="showCsvUpload = false">&times;</span>
+                <h2>Upload Pariciones CSV</h2>
+                <div class="upload-area">
+                    <input type="file" ref="csvFile" @change="handleCsvFile" accept=".csv" style="display: none;">
+                    <div class="drop-zone" @click="$refs.csvFile.click()" @drop="handleDrop" @dragover.prevent @dragenter.prevent>
+                        <p>Drag and drop CSV file here or click to select</p>
+                        <button type="button" class="btn-secondary">Choose File</button>
+                    </div>
+                </div>
+                <div v-if="csvPreview.length > 0" class="csv-preview">
+                    <h3>Preview:</h3>
+                    <div :class="['duplicate-info', duplicates.length > 0 ? 'has-duplicates' : 'no-duplicates']">
+                        <span v-if="duplicates.length > 0">
+                            ⚠️ {{ duplicates.length }} duplicates found: {{ duplicates.map(d => `${d.vaca} (${d.fecha})`).join(', ') }}
+                        </span>
+                        <span v-else>
+                            ✅ No duplicates found. {{ csvPreview.length }} new records will be added.
+                        </span>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Vaca</th>
+                                <th>Gender</th>
+                                <th>Fecha</th>
+                                <th>Notes</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="paricion in csvPreview" :key="paricion.id" :style="isDuplicate(paricion) ? 'background-color: #f8d7da;' : ''">
+                                <td>{{ paricion.vaca }}</td>
+                                <td>{{ paricion.gender }}</td>
+                                <td>{{ paricion.fecha }}</td>
+                                <td>{{ paricion.notes }}</td>
+                                <td>{{ isDuplicate(paricion) ? 'Duplicate' : 'New' }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <button @click="processCsvData" class="btn-primary">Confirm Upload</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="vue-app.js"></script>
+</body>
+</html>
