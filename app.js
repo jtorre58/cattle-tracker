@@ -51,7 +51,9 @@ createApp({
                 gender: 'H',
                 fecha: '',
                 notes: '',
-                image: null
+                image: null,
+                arete: '',
+                parentId: null
             },
             
             // Ganado Import
@@ -69,8 +71,22 @@ createApp({
                 fechas: '',
                 muerto_vendido: 'N',
                 notas: '',
-                image: null
-            }
+                image: null,
+                arete: '',
+                parentId: null
+            },
+            
+            // Form change tracking
+            originalParicion: null,
+            originalGanado: null,
+            
+            // Image lightbox
+            showImageLightbox: false,
+            lightboxImage: null,
+            
+            // Family tree
+            showFamilyTree: false,
+            selectedAnimal: null
         }
     },
     
@@ -87,13 +103,98 @@ createApp({
             return this.activeAnimals.filter(a => a.gender === 'female').length;
         },
         
-        // Pariciones Calculations (H/M based)
+        // Pariciones Calculations (H/M based) - use filtered data
         paricionesMales() {
-            return this.filteredPariciones.filter(p => p.gender.toUpperCase() === 'M').length;
+            // Force reactivity by directly accessing filter properties
+            let filtered = [...this.pariciones];
+            
+            if (this.yearFilter !== 'all') {
+                filtered = filtered.filter(p => {
+                    const date = this.parseDate(p.fecha);
+                    return date && date.getFullYear() == this.yearFilter;
+                });
+            }
+            
+            if (this.monthFilter !== 'all') {
+                filtered = filtered.filter(p => {
+                    const date = this.parseDate(p.fecha);
+                    return date && (date.getMonth() + 1) == this.monthFilter;
+                });
+            }
+            
+            if (this.dateFrom) {
+                const fromDate = new Date(this.dateFrom);
+                filtered = filtered.filter(p => {
+                    const date = this.parseDate(p.fecha);
+                    return date && date >= fromDate;
+                });
+            }
+            
+            if (this.dateTo) {
+                const toDate = new Date(this.dateTo);
+                filtered = filtered.filter(p => {
+                    const date = this.parseDate(p.fecha);
+                    return date && date <= toDate;
+                });
+            }
+            
+            return filtered.filter(p => p.gender && p.gender.toUpperCase() === 'M').length;
         },
         
         paricionesHembras() {
-            return this.filteredPariciones.filter(p => p.gender.toUpperCase() === 'H').length;
+            // Force reactivity by directly accessing filter properties
+            let filtered = [...this.pariciones];
+            
+            if (this.yearFilter !== 'all') {
+                filtered = filtered.filter(p => {
+                    const date = this.parseDate(p.fecha);
+                    return date && date.getFullYear() == this.yearFilter;
+                });
+            }
+            
+            if (this.monthFilter !== 'all') {
+                filtered = filtered.filter(p => {
+                    const date = this.parseDate(p.fecha);
+                    return date && (date.getMonth() + 1) == this.monthFilter;
+                });
+            }
+            
+            if (this.dateFrom) {
+                const fromDate = new Date(this.dateFrom);
+                filtered = filtered.filter(p => {
+                    const date = this.parseDate(p.fecha);
+                    return date && date >= fromDate;
+                });
+            }
+            
+            if (this.dateTo) {
+                const toDate = new Date(this.dateTo);
+                filtered = filtered.filter(p => {
+                    const date = this.parseDate(p.fecha);
+                    return date && date <= toDate;
+                });
+            }
+            
+            return filtered.filter(p => p.gender && p.gender.toUpperCase() === 'H').length;
+        },
+        
+        totalFilteredPariciones() {
+            return this.filteredPariciones.length;
+        },
+        
+        // Debug counter to test reactivity
+        debugYearFilter() {
+            return `Year: ${this.yearFilter} - Count: ${this.filteredPariciones.length}`;
+        },
+        
+        // Debug available years
+        debugAvailableYears() {
+            const debug = [];
+            this.pariciones.forEach((p, i) => {
+                const date = this.parseDate(p.fecha);
+                debug.push(`${i}: "${p.fecha}" -> ${date ? date.getFullYear() : 'null'}`);
+            });
+            return debug.slice(0, 5); // Show first 5
         },
         
         filteredAnimals() {
@@ -146,10 +247,18 @@ createApp({
         availableYears() {
             const years = new Set();
             this.pariciones.forEach(p => {
-                const date = this.parseDate(p.fecha);
-                if (date) years.add(date.getFullYear());
+                if (p.fecha && typeof p.fecha === 'string') {
+                    const date = this.parseDate(p.fecha);
+                    if (date && date instanceof Date && !isNaN(date.getTime())) {
+                        const year = date.getFullYear();
+                        if (Number.isInteger(year) && year >= 1900 && year <= 2100) {
+                            years.add(year);
+                        }
+                    }
+                }
             });
-            return Array.from(years).sort((a, b) => b - a);
+            const validYears = Array.from(years).filter(year => Number.isInteger(year) && !isNaN(year));
+            return validYears.sort((a, b) => b - a);
         },
         
         filteredGanado() {
@@ -244,6 +353,16 @@ createApp({
         
         recentActivities() {
             return this.activities.slice(0, 10);
+        },
+        
+        paricionHasChanges() {
+            if (!this.originalParicion) return false;
+            return JSON.stringify(this.currentParicion) !== JSON.stringify(this.originalParicion);
+        },
+        
+        ganadoHasChanges() {
+            if (!this.originalGanado) return false;
+            return JSON.stringify(this.newGanado) !== JSON.stringify(this.originalGanado);
         }
     },
     
@@ -393,16 +512,52 @@ createApp({
         },
         
         parseDate(dateStr) {
-            if (!dateStr) return null;
+            if (!dateStr || typeof dateStr !== 'string') return null;
             
-            const parts = dateStr.split('/');
+            const trimmed = dateStr.trim();
+            if (!trimmed) return null;
+            
+            // Handle MM/YY format (e.g., "08/23", "1/24")
+            const parts = trimmed.split('/');
             if (parts.length === 2) {
                 const month = parseInt(parts[0]);
                 const year = parseInt(parts[1]);
-                const fullYear = year < 50 ? 2000 + year : 1900 + year;
+                
+                // Validate month and year
+                if (isNaN(month) || isNaN(year) || month < 1 || month > 12) return null;
+                
+                // Convert 2-digit year to 4-digit
+                let fullYear;
+                if (year < 50) {
+                    fullYear = 2000 + year;
+                } else if (year < 100) {
+                    fullYear = 1900 + year;
+                } else {
+                    fullYear = year;
+                }
+                
+                // Validate final year
+                if (fullYear < 1900 || fullYear > 2100) return null;
+                
                 return new Date(fullYear, month - 1, 1);
             }
-            return new Date(dateStr);
+            
+            // Handle MM/DD/YYYY format
+            if (parts.length === 3) {
+                const month = parseInt(parts[0]);
+                const day = parseInt(parts[1]);
+                const year = parseInt(parts[2]);
+                
+                if (isNaN(month) || isNaN(day) || isNaN(year) || 
+                    month < 1 || month > 12 || day < 1 || day > 31 ||
+                    year < 1900 || year > 2100) return null;
+                
+                return new Date(year, month - 1, day);
+            }
+            
+            // Try to parse as regular date
+            const date = new Date(trimmed);
+            return isNaN(date.getTime()) ? null : date;
         },
         
         calculateAge(birthDate) {
@@ -452,7 +607,6 @@ createApp({
         clearAllData() {
             if (this.activeTab === 'pariciones') {
                 if (confirm('¿Estás seguro de que quieres eliminar TODOS los datos de Pariciones? Esta acción no se puede deshacer.')) {
-                    this.animals = [];
                     this.pariciones = [];
                     this.saveData();
                     alert('Datos de Pariciones eliminados exitosamente!');
@@ -559,8 +713,11 @@ createApp({
                 fechas: '',
                 muerto_vendido: 'N',
                 notas: '',
-                image: null
+                image: null,
+                arete: '',
+                parentId: null
             };
+            this.originalGanado = null;
         },
         
         parseGanadoData() {
@@ -645,8 +802,14 @@ createApp({
             this.importPreview = [];
             let skippedRows = [];
             
-            // Skip header row if it exists
-            const startIndex = lines[0].toLowerCase().includes('vaca') ? 1 : 0;
+            // Skip header row - check if first row contains header keywords
+            let startIndex = 0;
+            if (lines.length > 0) {
+                const firstLine = lines[0].toLowerCase();
+                if (firstLine.includes('vaca') || firstLine.includes('h/m') || firstLine.includes('fecha')) {
+                    startIndex = 1;
+                }
+            }
             
             for (let i = startIndex; i < lines.length; i++) {
                 const line = lines[i].trim();
@@ -727,12 +890,46 @@ createApp({
         editParicion(paricion) {
             this.editingParicion = paricion;
             this.currentParicion = { ...paricion };
+            this.originalParicion = { ...paricion };
+            this.showAddParicion = true;
+        },
+        
+        startAddParicion() {
+            this.editingParicion = null;
+            this.resetParicionForm();
+            // For new records, set original to empty so any input shows as changes
+            this.originalParicion = {
+                vaca: '',
+                gender: 'H',
+                fecha: '',
+                notes: '',
+                image: null
+            };
             this.showAddParicion = true;
         },
         
         editGanadoRecord(ganado) {
             this.editingGanado = ganado;
             this.newGanado = { ...ganado };
+            this.originalGanado = { ...ganado };
+            this.showAddGanado = true;
+        },
+        
+        startAddGanado() {
+            this.editingGanado = null;
+            this.resetGanadoForm();
+            // For new records, set original to empty so any input shows as changes
+            this.originalGanado = {
+                animal: '',
+                origen: '',
+                comentarios: '',
+                gender: 'H',
+                tipo: 'V',
+                fechas: '',
+                muerto_vendido: 'N',
+                notas: '',
+                image: null
+            };
             this.showAddGanado = true;
         },
         
@@ -772,8 +969,11 @@ createApp({
                 gender: 'H',
                 fecha: '',
                 notes: '',
-                image: null
+                image: null,
+                arete: '',
+                parentId: null
             };
+            this.originalParicion = null;
         },
         
         handleParicionImage(event) {
@@ -829,11 +1029,81 @@ createApp({
             alert('Test data added!');
         },
 
+        // Reprocess existing data to ensure parsedDate is set
+        reprocessExistingData() {
+            let updated = false;
+            this.pariciones.forEach(p => {
+                if (p.fecha && !p.parsedDate) {
+                    p.parsedDate = this.parseDate(p.fecha);
+                    updated = true;
+                }
+            });
+            if (updated) {
+                this.saveData();
+            }
+        },
+        
+        openImageLightbox(imageUrl) {
+            this.lightboxImage = imageUrl;
+            this.showImageLightbox = true;
+        },
+        
+        showFamilyTreeFor(animal) {
+            this.selectedAnimal = animal;
+            this.showFamilyTree = true;
+        },
+        
+        getFamilyTree(animal) {
+            const tree = {
+                animal: animal,
+                parent: null,
+                grandparent: null,
+                children: [],
+                grandchildren: []
+            };
+            
+            // Find parent
+            if (animal.parentId) {
+                const parent = [...this.pariciones, ...this.ganado].find(a => a.id === animal.parentId);
+                if (parent) {
+                    tree.parent = parent;
+                    
+                    // Find grandparent
+                    if (parent.parentId) {
+                        const grandparent = [...this.pariciones, ...this.ganado].find(a => a.id === parent.parentId);
+                        if (grandparent) {
+                            tree.grandparent = grandparent;
+                        }
+                    }
+                }
+            }
+            
+            // Find children
+            tree.children = [...this.pariciones, ...this.ganado].filter(a => a.parentId === animal.id);
+            
+            // Find grandchildren
+            tree.children.forEach(child => {
+                const grandchildren = [...this.pariciones, ...this.ganado].filter(a => a.parentId === child.id);
+                tree.grandchildren.push(...grandchildren);
+            });
+            
+            return tree;
+        },
+        
+        getAllAnimals() {
+            return [...this.pariciones, ...this.ganado].filter(a => a.vaca || a.animal);
+        },
+
         saveData() {
             localStorage.setItem('ranchAnimals', JSON.stringify(this.animals));
             localStorage.setItem('ranchActivities', JSON.stringify(this.activities));
             localStorage.setItem('ranchPariciones', JSON.stringify(this.pariciones));
             localStorage.setItem('ranchGanado', JSON.stringify(this.ganado));
         }
+    },
+    
+    mounted() {
+        // Reprocess existing data to ensure years dropdown works
+        this.reprocessExistingData();
     }
 }).mount('#app');
