@@ -3,10 +3,17 @@ const { createApp } = Vue;
 createApp({
     data() {
         return {
-            animals: JSON.parse(localStorage.getItem('ranchAnimals')) || [],
-            activities: JSON.parse(localStorage.getItem('ranchActivities')) || [],
-            pariciones: JSON.parse(localStorage.getItem('ranchPariciones')) || [],
-            ganado: JSON.parse(localStorage.getItem('ranchGanado')) || [],
+            // User Management
+            currentUser: null,
+            users: JSON.parse(localStorage.getItem('cattle_users')) || [],
+            showUserSelection: true,
+            newUserName: '',
+            
+            // Data (user-specific)
+            animals: [],
+            activities: [],
+            pariciones: [],
+            ganado: [],
             
             // UI State
             activeTab: 'pariciones',
@@ -18,8 +25,21 @@ createApp({
             showGanadoImport: false,
             animalFilter: 'all',
             ganadoFilter: 'all',
+            ganadoStatusFilter: 'all',
+            ganadoOrigenFilter: '',
+            ganadoDateFilter: '',
+            ganadoCommentFilter: '',
+            ganadoGenderFilter: 'all',
             yearFilter: 'all',
             monthFilter: 'all',
+            
+            // Backup/Snapshot System
+            savedSnapshots: [],
+            showSnapshotManager: false,
+            snapshotName: '',
+            showHelp: false,
+            helpSection: 'overview',
+            
             dateFrom: '',
             dateTo: '',
             
@@ -32,7 +52,7 @@ createApp({
                 birthDate: '',
                 breed: '',
                 weight: '',
-                notes: ''
+                criaDescripcion: ''
             },
             
             // CSV Upload
@@ -50,7 +70,7 @@ createApp({
                 vaca: '',
                 gender: 'H',
                 fecha: '',
-                notes: '',
+                criaDescripcion: '',
                 image: null,
                 arete: '',
                 parentId: null
@@ -59,6 +79,7 @@ createApp({
             // Ganado Import
             ganadoData: '',
             ganadoPreview: [],
+            ganadoDuplicates: [],
             editingGanado: null,
             
             // Ganado Form
@@ -70,7 +91,6 @@ createApp({
                 tipo: 'V',
                 fechas: '',
                 muerto_vendido: 'N',
-                notas: '',
                 image: null,
                 arete: '',
                 parentId: null
@@ -262,10 +282,54 @@ createApp({
         },
         
         filteredGanado() {
-            if (this.ganadoFilter === 'all') {
-                return this.ganado;
+            let filtered = this.ganado;
+            
+            // Filter by type
+            if (this.ganadoFilter !== 'all') {
+                filtered = filtered.filter(g => g.tipo === this.ganadoFilter);
             }
-            return this.ganado.filter(g => g.tipo === this.ganadoFilter);
+            
+            // Filter by status (alive/dead)
+            if (this.ganadoStatusFilter !== 'all') {
+                if (this.ganadoStatusFilter === 'alive') {
+                    filtered = filtered.filter(g => g.muerto_vendido !== 'S');
+                } else if (this.ganadoStatusFilter === 'dead') {
+                    filtered = filtered.filter(g => g.muerto_vendido === 'S');
+                }
+            }
+            
+            // Filter by gender
+            if (this.ganadoGenderFilter !== 'all') {
+                filtered = filtered.filter(g => g.gender === this.ganadoGenderFilter);
+            }
+            
+            // Filter by origen (partial match, case insensitive)
+            if (this.ganadoOrigenFilter.trim()) {
+                filtered = filtered.filter(g => 
+                    g.origen && g.origen.toLowerCase().includes(this.ganadoOrigenFilter.toLowerCase())
+                );
+            }
+            
+            // Filter by date (partial match in fechas field)
+            if (this.ganadoDateFilter.trim()) {
+                filtered = filtered.filter(g => 
+                    g.fechas && g.fechas.toLowerCase().includes(this.ganadoDateFilter.toLowerCase())
+                );
+            }
+            
+            // Filter by comments (partial match, case insensitive)
+            if (this.ganadoCommentFilter.trim()) {
+                filtered = filtered.filter(g => 
+                    g.comentarios && g.comentarios.toLowerCase().includes(this.ganadoCommentFilter.toLowerCase())
+                );
+            }
+            
+            return filtered;
+        },
+        
+        uniqueOrigenes() {
+            const origenes = [...new Set(this.ganado.map(g => g.origen).filter(o => o && o.trim()))];
+            return origenes.sort();
         },
         
         ganadoByType() {
@@ -293,11 +357,11 @@ createApp({
         },
         
         ganadoHembrasTotal() {
-            return this.ganado.filter(g => g.gender === 'H').length; // 93
+            return this.ganado.filter(g => g.gender === 'H' && g.muerto_vendido !== 'S').length;
         },
         
         ganadoMachosTotal() {
-            return this.ganado.filter(g => g.gender === 'M').length; // 8
+            return this.ganado.filter(g => g.gender === 'M' && g.muerto_vendido !== 'S').length;
         },
         
         ganadoCriasNacidas() {
@@ -392,7 +456,7 @@ createApp({
                 birthDate: '',
                 breed: '',
                 weight: '',
-                notes: ''
+                criaDescripcion: ''
             };
         },
         
@@ -461,7 +525,7 @@ createApp({
                         vaca: values[0].trim(),
                         gender: values[1] ? values[1].trim() : '',
                         fecha: values[2] ? values[2].trim() : '',
-                        notes: values[3] ? values[3].trim() : '',
+                        criaDescripcion: values[3] ? values[3].trim() : '',
                         id: Date.now().toString() + i
                     };
                     console.log('Created paricion:', paricion); // Debug
@@ -712,7 +776,6 @@ createApp({
                 tipo: 'V',
                 fechas: '',
                 muerto_vendido: 'N',
-                notas: '',
                 image: null,
                 arete: '',
                 parentId: null
@@ -747,7 +810,6 @@ createApp({
                         tipo: values[4] ? values[4].trim() : 'V',
                         fechas: values[5] ? values[5].trim() : '',
                         muerto_vendido: values[6] ? values[6].trim() : 'N',
-                        notas: values[7] ? values[7].trim() : '',
                         id: Date.now().toString() + i,
                         dateAdded: new Date().toISOString()
                     };
@@ -757,17 +819,40 @@ createApp({
             }
             
             console.log('Total ganado parsed:', this.ganadoPreview.length); // Debug
+            this.findGanadoDuplicates();
+        },
+        
+        findGanadoDuplicates() {
+            this.ganadoDuplicates = [];
+            for (const newGanado of this.ganadoPreview) {
+                const existing = this.ganado.find(g => 
+                    g.animal.toLowerCase() === newGanado.animal.toLowerCase() && 
+                    g.origen === newGanado.origen &&
+                    g.tipo === newGanado.tipo &&
+                    g.fechas === newGanado.fechas &&
+                    g.comentarios === newGanado.comentarios
+                );
+                if (existing) {
+                    this.ganadoDuplicates.push({
+                        new: newGanado,
+                        existing: existing
+                    });
+                }
+            }
         },
         
         processGanadoData() {
             const importCount = this.ganadoPreview.length;
             
-            // Check for duplicates
+            // Filter out duplicates
+            const duplicateAnimals = this.ganadoDuplicates.map(d => d.new);
             const newRecords = this.ganadoPreview.filter(newG => 
-                !this.ganado.some(existing => 
-                    existing.animal === newG.animal && 
-                    existing.origen === newG.origen &&
-                    existing.tipo === newG.tipo
+                !duplicateAnimals.some(dup => 
+                    dup.animal === newG.animal && 
+                    dup.origen === newG.origen &&
+                    dup.tipo === newG.tipo &&
+                    dup.fechas === newG.fechas &&
+                    dup.comentarios === newG.comentarios
                 )
             );
             
@@ -775,7 +860,7 @@ createApp({
                 this.ganado.push(ganado);
             });
             
-            const duplicateCount = importCount - newRecords.length;
+            const duplicateCount = this.ganadoDuplicates.length;
             
             this.addActivity(`Imported ${newRecords.length} ganado records${duplicateCount > 0 ? ` (${duplicateCount} duplicates skipped)` : ''}`);
             this.saveData();
@@ -783,6 +868,7 @@ createApp({
             this.showGanadoImport = false;
             this.ganadoData = '';
             this.ganadoPreview = [];
+            this.ganadoDuplicates = [];
             
             alert(`Successfully imported ${newRecords.length} ganado records!${duplicateCount > 0 ? ` ${duplicateCount} duplicates were skipped.` : ''}`);
         },
@@ -823,7 +909,7 @@ createApp({
                         vaca: values[0].trim(),
                         gender: values[1] ? values[1].trim() : '',
                         fecha: values[2] ? values[2].trim() : '',
-                        notes: values[3] ? values[3].trim() : '',
+                        criaDescripcion: values[3] ? values[3].trim() : '',
                         id: Date.now().toString() + i
                     };
                     
@@ -902,7 +988,7 @@ createApp({
                 vaca: '',
                 gender: 'H',
                 fecha: '',
-                notes: '',
+                criaDescripcion: '',
                 image: null
             };
             this.showAddParicion = true;
@@ -927,10 +1013,18 @@ createApp({
                 tipo: 'V',
                 fechas: '',
                 muerto_vendido: 'N',
-                notas: '',
                 image: null
             };
             this.showAddGanado = true;
+        },
+        
+        clearGanadoFilters() {
+            this.ganadoFilter = 'all';
+            this.ganadoStatusFilter = 'all';
+            this.ganadoOrigenFilter = '';
+            this.ganadoDateFilter = '';
+            this.ganadoCommentFilter = '';
+            this.ganadoGenderFilter = 'all';
         },
         
         saveParicion() {
@@ -968,7 +1062,7 @@ createApp({
                 vaca: '',
                 gender: 'H',
                 fecha: '',
-                notes: '',
+                criaDescripcion: '',
                 image: null,
                 arete: '',
                 parentId: null
@@ -1011,11 +1105,213 @@ createApp({
             alert(`Animal Details:\nID: ${animal.tagNumber}\nName: ${animal.name || 'Unnamed'}\nType: ${animal.type}\nGender: ${animal.gender}\nAge: ${this.calculateAge(animal.birthDate)}`);
         },
         
+        // Snapshot/Backup Methods
+        saveSnapshot(type = 'full') {
+            if (!this.snapshotName.trim()) {
+                alert('Por favor ingresa un nombre para el respaldo');
+                return;
+            }
+            
+            if (!this.currentUser) {
+                alert('Error: No hay usuario seleccionado');
+                return;
+            }
+            
+            const timestamp = new Date().toISOString();
+            const snapshot = {
+                id: Date.now().toString(),
+                name: this.snapshotName.trim(),
+                type: type, // 'full', 'pariciones', 'ganado'
+                timestamp: timestamp,
+                date: new Date().toLocaleDateString('es-ES'),
+                userId: this.currentUser.id,
+                userName: this.currentUser.name,
+                data: {}
+            };
+            
+            if (type === 'full') {
+                snapshot.data = {
+                    pariciones: [...this.pariciones],
+                    ganado: [...this.ganado]
+                };
+            } else if (type === 'pariciones') {
+                snapshot.data = {
+                    pariciones: [...this.pariciones]
+                };
+            } else if (type === 'ganado') {
+                snapshot.data = {
+                    ganado: [...this.ganado]
+                };
+            }
+            
+            this.savedSnapshots.push(snapshot);
+            this.saveSnapshots();
+            this.snapshotName = '';
+            alert(`Respaldo "${snapshot.name}" guardado exitosamente`);
+        },
+        
+        loadSnapshot(snapshotId) {
+            const snapshot = this.savedSnapshots.find(s => s.id === snapshotId);
+            if (!snapshot) {
+                alert('Respaldo no encontrado');
+                return;
+            }
+            
+            const confirmLoad = confirm(`¿Estás seguro de cargar el respaldo "${snapshot.name}"?\nEsto reemplazará los datos actuales.`);
+            if (!confirmLoad) return;
+            
+            if (snapshot.data.pariciones) {
+                this.pariciones = [...snapshot.data.pariciones];
+            }
+            if (snapshot.data.ganado) {
+                this.ganado = [...snapshot.data.ganado];
+            }
+            
+            this.saveData();
+            this.addActivity(`Cargado respaldo: ${snapshot.name}`);
+            alert(`Respaldo "${snapshot.name}" cargado exitosamente`);
+        },
+        
+        deleteSnapshot(snapshotId) {
+            const snapshot = this.savedSnapshots.find(s => s.id === snapshotId);
+            if (!snapshot) return;
+            
+            const confirmDelete = confirm(`¿Estás seguro de eliminar el respaldo "${snapshot.name}"?`);
+            if (!confirmDelete) return;
+            
+            this.savedSnapshots = this.savedSnapshots.filter(s => s.id !== snapshotId);
+            this.saveSnapshots();
+            alert(`Respaldo "${snapshot.name}" eliminado`);
+        },
+        
+        downloadSnapshot(snapshotId) {
+            const snapshot = this.savedSnapshots.find(s => s.id === snapshotId);
+            if (!snapshot) return;
+            
+            const dataStr = JSON.stringify(snapshot, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `respaldo_${snapshot.name}_${snapshot.date}.json`;
+            link.click();
+            URL.revokeObjectURL(url);
+        },
+        
+        saveSnapshots() {
+            if (!this.currentUser) return;
+            localStorage.setItem(`cattle_${this.currentUser.id}_snapshots`, JSON.stringify(this.savedSnapshots));
+        },
+        
+        loadSnapshots() {
+            if (!this.currentUser) return;
+            const saved = localStorage.getItem(`cattle_${this.currentUser.id}_snapshots`);
+            if (saved) {
+                this.savedSnapshots = JSON.parse(saved);
+            }
+        },
+        
+        // User Management Methods
+        initializeUsers() {
+            // Create Alex as default user if no users exist
+            if (this.users.length === 0) {
+                const alexUser = {
+                    id: 'user_alex',
+                    name: 'Alex',
+                    createdAt: new Date().toISOString()
+                };
+                this.users.push(alexUser);
+                this.saveUsers();
+                
+                // Migrate existing data to Alex
+                this.migrateExistingDataToAlex();
+            }
+        },
+        
+        migrateExistingDataToAlex() {
+            const existingPariciones = JSON.parse(localStorage.getItem('ranchPariciones')) || [];
+            const existingGanado = JSON.parse(localStorage.getItem('ranchGanado')) || [];
+            const existingSnapshots = JSON.parse(localStorage.getItem('cattle_snapshots')) || [];
+            
+            if (existingPariciones.length > 0 || existingGanado.length > 0 || existingSnapshots.length > 0) {
+                // Save existing data under Alex's profile
+                localStorage.setItem('cattle_user_alex_pariciones', JSON.stringify(existingPariciones));
+                localStorage.setItem('cattle_user_alex_ganado', JSON.stringify(existingGanado));
+                
+                // Migrate snapshots to Alex
+                const alexSnapshots = existingSnapshots.map(snapshot => ({
+                    ...snapshot,
+                    userId: 'user_alex',
+                    userName: 'Alex'
+                }));
+                localStorage.setItem('cattle_user_alex_snapshots', JSON.stringify(alexSnapshots));
+            }
+        },
+        
+        selectUser(userId) {
+            const user = this.users.find(u => u.id === userId);
+            if (!user) return;
+            
+            this.currentUser = user;
+            this.showUserSelection = false;
+            this.loadUserData();
+            localStorage.setItem('cattle_current_user', userId);
+        },
+        
+        createNewUser() {
+            if (!this.newUserName.trim()) {
+                alert('Por favor ingresa un nombre de usuario');
+                return;
+            }
+            
+            const userId = 'user_' + Date.now();
+            const newUser = {
+                id: userId,
+                name: this.newUserName.trim(),
+                createdAt: new Date().toISOString()
+            };
+            
+            this.users.push(newUser);
+            this.saveUsers();
+            this.newUserName = '';
+            
+            // Initialize empty data for new user
+            localStorage.setItem(`cattle_${userId}_pariciones`, JSON.stringify([]));
+            localStorage.setItem(`cattle_${userId}_ganado`, JSON.stringify([]));
+            localStorage.setItem(`cattle_${userId}_snapshots`, JSON.stringify([]));
+            
+            alert(`Usuario "${newUser.name}" creado exitosamente`);
+        },
+        
+        loadUserData() {
+            if (!this.currentUser) return;
+            
+            const userId = this.currentUser.id;
+            this.pariciones = JSON.parse(localStorage.getItem(`cattle_${userId}_pariciones`)) || [];
+            this.ganado = JSON.parse(localStorage.getItem(`cattle_${userId}_ganado`)) || [];
+            this.savedSnapshots = JSON.parse(localStorage.getItem(`cattle_${userId}_snapshots`)) || [];
+            this.activities = JSON.parse(localStorage.getItem(`cattle_${userId}_activities`)) || [];
+        },
+        
+        saveUsers() {
+            localStorage.setItem('cattle_users', JSON.stringify(this.users));
+        },
+        
+        logoutUser() {
+            this.currentUser = null;
+            this.showUserSelection = true;
+            this.pariciones = [];
+            this.ganado = [];
+            this.savedSnapshots = [];
+            this.activities = [];
+            localStorage.removeItem('cattle_current_user');
+        },
+        
         addTestData() {
             const testPariciones = [
-                { id: '1', vaca: 'Gorrita', gender: 'H', fecha: '08/23', notes: 'Test data' },
-                { id: '2', vaca: 'Mora', gender: 'M', fecha: '08/23', notes: 'Test data' },
-                { id: '3', vaca: 'Colorada', gender: 'M', fecha: '1/24', notes: 'Test data' }
+                { id: '1', vaca: 'Gorrita', gender: 'H', fecha: '08/23', criaDescripcion: 'Test data' },
+                { id: '2', vaca: 'Mora', gender: 'M', fecha: '08/23', criaDescripcion: 'Test data' },
+                { id: '3', vaca: 'Colorada', gender: 'M', fecha: '1/24', criaDescripcion: 'Test data' }
             ];
             
             testPariciones.forEach(p => {
@@ -1095,14 +1391,31 @@ createApp({
         },
 
         saveData() {
-            localStorage.setItem('ranchAnimals', JSON.stringify(this.animals));
-            localStorage.setItem('ranchActivities', JSON.stringify(this.activities));
-            localStorage.setItem('ranchPariciones', JSON.stringify(this.pariciones));
-            localStorage.setItem('ranchGanado', JSON.stringify(this.ganado));
+            if (!this.currentUser) return;
+            
+            const userId = this.currentUser.id;
+            localStorage.setItem(`cattle_${userId}_pariciones`, JSON.stringify(this.pariciones));
+            localStorage.setItem(`cattle_${userId}_ganado`, JSON.stringify(this.ganado));
+            localStorage.setItem(`cattle_${userId}_activities`, JSON.stringify(this.activities));
         }
     },
     
     mounted() {
+        // Initialize user system
+        this.initializeUsers();
+        
+        // Check if there's a previously selected user
+        const savedUserId = localStorage.getItem('cattle_current_user');
+        if (savedUserId && this.users.find(u => u.id === savedUserId)) {
+            this.selectUser(savedUserId);
+        } else if (this.users.length > 0) {
+            // Default to Alex if no saved user
+            const alexUser = this.users.find(u => u.name === 'Alex');
+            if (alexUser) {
+                this.selectUser(alexUser.id);
+            }
+        }
+        
         // Reprocess existing data to ensure years dropdown works
         this.reprocessExistingData();
     }

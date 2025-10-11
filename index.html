@@ -9,11 +9,54 @@
 </head>
 <body>
     <div id="app">
+        <!-- User Selection Screen -->
+        <div v-if="showUserSelection" class="user-selection-screen">
+            <div class="user-selection-container">
+                <div class="user-selection-header">
+                    <h1>🐄 Sistema de Gestión Ganadera</h1>
+                    <p>Selecciona tu usuario para continuar</p>
+                </div>
+                
+                <div class="user-list">
+                    <h3>👥 Usuarios Existentes</h3>
+                    <div class="users-grid">
+                        <div v-for="user in users" :key="user.id" class="user-card" @click="selectUser(user.id)">
+                            <div class="user-avatar">{{ user.name.charAt(0).toUpperCase() }}</div>
+                            <div class="user-info">
+                                <h4>{{ user.name }}</h4>
+                                <p>Creado: {{ new Date(user.createdAt).toLocaleDateString('es-ES') }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="create-user">
+                    <h3>➕ Crear Nuevo Usuario</h3>
+                    <div class="create-user-form">
+                        <input 
+                            type="text" 
+                            v-model="newUserName" 
+                            placeholder="Nombre del nuevo usuario..." 
+                            class="user-input"
+                            @keyup.enter="createNewUser"
+                        >
+                        <button @click="createNewUser" class="btn-create-user">Crear Usuario</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Application (only show when user is selected) -->
+        <div v-if="!showUserSelection && currentUser" class="main-app">
         <!-- Header -->
         <header class="modern-header">
             <div class="header-container">
                 <div class="brand">
                     <h1>🐄 Sistema de Gestión Ganadera</h1>
+                    <div class="user-indicator">
+                        <span class="current-user">👤 {{ currentUser.name }}</span>
+                        <button @click="logoutUser" class="logout-btn" title="Cambiar Usuario">🚪</button>
+                    </div>
                 </div>
                 <nav class="main-nav">
                     <button @click="activeTab = 'pariciones'" :class="{ active: activeTab === 'pariciones' }" class="nav-btn">
@@ -21,6 +64,9 @@
                     </button>
                     <button @click="activeTab = 'ganado'" :class="{ active: activeTab === 'ganado' }" class="nav-btn">
                         🐮 Inventario
+                    </button>
+                    <button @click="showHelp = true" class="nav-btn help-btn" title="Ayuda y Documentación">
+                        ❓ Ayuda
                     </button>
                 </nav>
             </div>
@@ -55,6 +101,9 @@
                         </button>
                         <button v-if="activeTab === 'ganado'" @click="showGanadoImport = true" class="action-btn secondary">
                             📋 Datos Ganado
+                        </button>
+                        <button @click="showSnapshotManager = true" class="action-btn info">
+                            💾 Respaldos
                         </button>
                     </div>
                 </div>
@@ -135,6 +184,13 @@
                                 </div>
                                 <div class="stat-value">{{ ganadoMachosTotal }}</div>
                             </div>
+                            <div class="stat-card primary">
+                                <div class="stat-header">
+                                    <span class="stat-icon">💀</span>
+                                    <h3>Muertos/Vendidos</h3>
+                                </div>
+                                <div class="stat-value">{{ ganadoMuertosVendidos }}</div>
+                            </div>
                         </template>
                     </div>
                 </section>
@@ -197,7 +253,7 @@
                                         <th>Arete</th>
                                         <th>Género</th>
                                         <th>Fecha</th>
-                                        <th>Notas</th>
+                                        <th>Cría Descripción</th>
                                         <th>Foto</th>
                                         <th>Acciones</th>
                                     </tr>
@@ -212,7 +268,7 @@
                                             </span>
                                         </td>
                                         <td class="cell-date">{{ paricion.fecha }}</td>
-                                        <td class="cell-notes">{{ paricion.notes || '-' }}</td>
+                                        <td class="cell-notes">{{ paricion.criaDescripcion || '-' }}</td>
                                         <td class="cell-image">
                                             <img v-if="paricion.image" :src="paricion.image" alt="Foto" class="table-image" @click="openImageLightbox(paricion.image)">
                                             <span v-else class="no-image">📷</span>
@@ -228,16 +284,61 @@
                     </div>
 
                     <!-- Ganado Table -->
-                    <div v-if="activeTab === 'ganado'" class="data-table-container">
+                    <div v-if="activeTab === 'ganado'" class="data-table-container ganado-container">
                         <h3>📋 Inventario de Ganado</h3>
                         <div class="filters-bar">
-                            <select v-model="ganadoFilter" class="filter-select">
-                                <option value="all">Todos los Tipos</option>
-                                <option value="V">Vacas</option>
-                                <option value="T">Toros</option>
-                                <option value="B">Becerras</option>
-                                <option value="_B">Becerros</option>
-                            </select>
+                            <div class="filter-row">
+                                <select v-model="ganadoFilter" class="filter-select">
+                                    <option value="all">Todos los Tipos</option>
+                                    <option value="V">🐄 Vacas</option>
+                                    <option value="T">🐂 Toros</option>
+                                    <option value="B">🐄 Becerras</option>
+                                    <option value="_B">🐂 Becerros</option>
+                                </select>
+                                
+                                <select v-model="ganadoStatusFilter" class="filter-select">
+                                    <option value="all">Todos los Estados</option>
+                                    <option value="alive">✅ Vivos</option>
+                                    <option value="dead">💀 Muertos/Vendidos</option>
+                                </select>
+                                
+                                <select v-model="ganadoGenderFilter" class="filter-select">
+                                    <option value="all">Todos los Géneros</option>
+                                    <option value="H">♀️ Hembras</option>
+                                    <option value="M">♂️ Machos</option>
+                                </select>
+                                
+                                <select v-model="ganadoOrigenFilter" class="filter-select">
+                                    <option value="">Todos los Orígenes</option>
+                                    <option v-for="origen in uniqueOrigenes" :key="origen" :value="origen">
+                                        {{ origen }}
+                                    </option>
+                                </select>
+                            </div>
+                            
+                            <div class="filter-row">
+                                <input 
+                                    type="text" 
+                                    v-model="ganadoDateFilter" 
+                                    placeholder="Filtrar por fecha..." 
+                                    class="filter-input"
+                                >
+                                
+                                <input 
+                                    type="text" 
+                                    v-model="ganadoCommentFilter" 
+                                    placeholder="Filtrar por comentarios..." 
+                                    class="filter-input"
+                                >
+                                
+                                <button @click="clearGanadoFilters" class="btn-clear-filters">
+                                    🗑️ Limpiar Filtros
+                                </button>
+                            </div>
+                            
+                            <div class="filter-results">
+                                Mostrando {{ filteredGanado.length }} de {{ ganado.length }} registros
+                            </div>
                         </div>
                         <div class="table-wrapper">
                             <table class="data-table">
@@ -248,6 +349,8 @@
                                         <th>Género</th>
                                         <th>Estado</th>
                                         <th>Origen</th>
+                                        <th>Comentarios</th>
+                                        <th>Fechas</th>
                                         <th>Acciones</th>
                                     </tr>
                                 </thead>
@@ -270,6 +373,8 @@
                                             </span>
                                         </td>
                                         <td class="cell-origin">{{ ganado.origen || '-' }}</td>
+                                        <td class="cell-comments">{{ ganado.comentarios || '-' }}</td>
+                                        <td class="cell-dates">{{ ganado.fechas || '-' }}</td>
                                         <td class="cell-actions">
                                             <button @click="editGanadoRecord(ganado)" class="edit-btn">✏️</button>
                                         </td>
@@ -280,6 +385,255 @@
                     </div>
                 </section>
             </main>
+        </div>
+
+        <!-- Help Modal -->
+        <div v-if="showHelp" class="modal-overlay" @click.self="showHelp = false">
+            <div class="modal-content help-modal">
+                <div class="modal-header">
+                    <h2>❓ Ayuda y Documentación</h2>
+                    <button @click="showHelp = false" class="modal-close">×</button>
+                </div>
+                
+                <div class="help-content">
+                    <div class="help-nav">
+                        <button @click="helpSection = 'overview'" :class="{ active: helpSection === 'overview' }" class="help-nav-btn">
+                            📋 Resumen
+                        </button>
+                        <button @click="helpSection = 'pariciones'" :class="{ active: helpSection === 'pariciones' }" class="help-nav-btn">
+                            🍼 Pariciones
+                        </button>
+                        <button @click="helpSection = 'inventario'" :class="{ active: helpSection === 'inventario' }" class="help-nav-btn">
+                            🐮 Inventario
+                        </button>
+                        <button @click="helpSection = 'import'" :class="{ active: helpSection === 'import' }" class="help-nav-btn">
+                            📥 Importar
+                        </button>
+                        <button @click="helpSection = 'backup'" :class="{ active: helpSection === 'backup' }" class="help-nav-btn">
+                            💾 Respaldos
+                        </button>
+                    </div>
+                    
+                    <div class="help-body">
+                        <!-- Overview Section -->
+                        <div v-if="helpSection === 'overview'" class="help-section">
+                            <h3>📋 Resumen del Sistema</h3>
+                            <p>El Sistema de Gestión Ganadera te permite llevar un control completo de tu ganado y pariciones.</p>
+                            
+                            <h4>🎯 Funciones Principales:</h4>
+                            <ul>
+                                <li><strong>🍼 Pariciones:</strong> Registra nacimientos y seguimiento de crías</li>
+                                <li><strong>🐮 Inventario:</strong> Control completo del ganado (vivos/muertos/vendidos)</li>
+                                <li><strong>📥 Importación:</strong> Desde CSV o hojas de cálculo</li>
+                                <li><strong>💾 Respaldos:</strong> Crea y restaura snapshots de tus datos</li>
+                                <li><strong>🔍 Filtros:</strong> Búsqueda avanzada por múltiples criterios</li>
+                                <li><strong>📊 Estadísticas:</strong> Contadores automáticos en tiempo real</li>
+                            </ul>
+                            
+                            <h4>🚀 Inicio Rápido:</h4>
+                            <ol>
+                                <li>Usa las pestañas <strong>🍼 Pariciones</strong> y <strong>🐮 Inventario</strong> para navegar</li>
+                                <li>Click <strong>➕ Nueva Parición</strong> o <strong>➕ Nuevo Ganado</strong> para agregar registros</li>
+                                <li>Usa los filtros para encontrar información específica</li>
+                                <li>Crea respaldos regulares con <strong>💾 Respaldos</strong></li>
+                            </ol>
+                        </div>
+                        
+                        <!-- Pariciones Section -->
+                        <div v-if="helpSection === 'pariciones'" class="help-section">
+                            <h3>🍼 Gestión de Pariciones</h3>
+                            <p>Registra y gestiona todos los nacimientos de tu ganado.</p>
+                            
+                            <h4>➕ Agregar Nueva Parición:</h4>
+                            <ol>
+                                <li>Click en <strong>➕ Nueva Parición</strong></li>
+                                <li>Completa los campos:
+                                    <ul>
+                                        <li><strong>Vaca:</strong> Nombre de la madre</li>
+                                        <li><strong>Género:</strong> H (Hembra) o M (Macho)</li>
+                                        <li><strong>Fecha:</strong> MM/YY o MM/DD/YYYY</li>
+                                        <li><strong>Cría Descripción:</strong> Detalles del nacimiento</li>
+                                        <li><strong>Foto:</strong> Imagen opcional</li>
+                                    </ul>
+                                </li>
+                                <li>Click <strong>➕ Agregar Parición</strong></li>
+                            </ol>
+                            
+                            <h4>🔍 Filtros Disponibles:</h4>
+                            <ul>
+                                <li><strong>Por año:</strong> Selecciona año específico</li>
+                                <li><strong>Por mes:</strong> Enero a Diciembre</li>
+                                <li><strong>Por género:</strong> Hembras, Machos, o Todos</li>
+                                <li><strong>Por fechas:</strong> Rango de fechas</li>
+                                <li><strong>Por vaca:</strong> Buscar por nombre de madre</li>
+                            </ul>
+                            
+                            <h4>✏️ Editar Pariciones:</h4>
+                            <p>Click en el botón <strong>✏️</strong> en cualquier fila para editar el registro.</p>
+                        </div>
+                        
+                        <!-- Inventario Section -->
+                        <div v-if="helpSection === 'inventario'" class="help-section">
+                            <h3>🐮 Inventario de Ganado</h3>
+                            <p>Control completo de tu inventario ganadero con estados y clasificaciones.</p>
+                            
+                            <h4>➕ Agregar Nuevo Ganado:</h4>
+                            <ol>
+                                <li>Click en <strong>➕ Nuevo Ganado</strong></li>
+                                <li>Completa los campos:
+                                    <ul>
+                                        <li><strong>Animal:</strong> Nombre del animal</li>
+                                        <li><strong>Tipo:</strong> Vaca, Toro, Becerra, Becerro</li>
+                                        <li><strong>Género:</strong> Hembra o Macho</li>
+                                        <li><strong>Estado:</strong> Vivo o Muerto/Vendido</li>
+                                        <li><strong>Origen:</strong> De dónde proviene</li>
+                                        <li><strong>Comentarios:</strong> Notas adicionales</li>
+                                        <li><strong>Fechas:</strong> Fechas importantes</li>
+                                    </ul>
+                                </li>
+                                <li>Click <strong>➕ Agregar Ganado</strong></li>
+                            </ol>
+                            
+                            <h4>🔍 Filtros Avanzados:</h4>
+                            <ul>
+                                <li><strong>Tipo:</strong> Vacas, Toros, Becerras, Becerros</li>
+                                <li><strong>Estado:</strong> Vivos, Muertos/Vendidos</li>
+                                <li><strong>Género:</strong> Hembras, Machos</li>
+                                <li><strong>Origen:</strong> Selecciona de lista de orígenes</li>
+                                <li><strong>Fechas:</strong> Busca texto en fechas</li>
+                                <li><strong>Comentarios:</strong> Busca texto en comentarios</li>
+                            </ul>
+                            
+                            <p><strong>💡 Tip:</strong> Usa <strong>🗑️ Limpiar Filtros</strong> para resetear todos los filtros.</p>
+                        </div>
+                        
+                        <!-- Import Section -->
+                        <div v-if="helpSection === 'import'" class="help-section">
+                            <h3>📥 Importación de Datos</h3>
+                            <p>Importa datos desde CSV o hojas de cálculo de Excel/Google Sheets.</p>
+                            
+                            <h4>📋 Desde Hoja de Cálculo:</h4>
+                            <ol>
+                                <li>Prepara tus datos en Excel/Google Sheets</li>
+                                <li>Selecciona y copia los datos (incluyendo encabezados)</li>
+                                <li>Click <strong>📋 Desde Hoja</strong></li>
+                                <li>Pega los datos en el área de texto</li>
+                                <li>Click <strong>📊 Procesar Datos</strong></li>
+                                <li>Revisa la vista previa y duplicados</li>
+                                <li>Click <strong>✅ Importar</strong></li>
+                            </ol>
+                            
+                            <h4>📄 Formato para Pariciones (4 columnas):</h4>
+                            <pre>Vaca, Género, Fecha, Cría Descripción
+Gorrita, H, 08/23, Becerra saludable
+Mora, M, 09/23, Becerro grande</pre>
+                            
+                            <h4>📄 Formato para Ganado (7 columnas):</h4>
+                            <pre>Animal, Origen, Comentarios, Género, Tipo, Fechas, Estado
+Becerra1, Rancho Norte, Animal joven, H, B, 01/2023, N
+Toro1, Compra, Reproductor, M, T, 12/2022, N</pre>
+                            
+                            <h4>⚠️ Detección de Duplicados:</h4>
+                            <p>El sistema detecta automáticamente duplicados y te muestra una comparación antes de importar.</p>
+                        </div>
+                        
+                        <!-- Backup Section -->
+                        <div v-if="helpSection === 'backup'" class="help-section">
+                            <h3>💾 Sistema de Respaldos</h3>
+                            <p>Crea y gestiona snapshots de tus datos para protección y migración.</p>
+                            
+                            <h4>💾 Crear Respaldo:</h4>
+                            <ol>
+                                <li>Click en <strong>💾 Respaldos</strong></li>
+                                <li>Ingresa un nombre descriptivo</li>
+                                <li>Selecciona el tipo:
+                                    <ul>
+                                        <li><strong>💾 Completo:</strong> Pariciones + Inventario</li>
+                                        <li><strong>🍼 Solo Pariciones:</strong> Solo nacimientos</li>
+                                        <li><strong>🐮 Solo Inventario:</strong> Solo ganado</li>
+                                    </ul>
+                                </li>
+                                <li>El respaldo se guarda automáticamente</li>
+                            </ol>
+                            
+                            <h4>📥 Cargar Respaldo:</h4>
+                            <ol>
+                                <li>En la lista de respaldos, encuentra el deseado</li>
+                                <li>Click <strong>📥 Cargar</strong></li>
+                                <li>Confirma la acción (reemplazará datos actuales)</li>
+                                <li>Los datos se restauran automáticamente</li>
+                            </ol>
+                            
+                            <h4>⬇️ Descargar Respaldo:</h4>
+                            <p>Click <strong>⬇️ Descargar</strong> para obtener un archivo JSON que puedes usar para transferir datos entre sistemas.</p>
+                            
+                            <h4>💡 Mejores Prácticas:</h4>
+                            <ul>
+                                <li>Crea respaldos antes de importaciones grandes</li>
+                                <li>Usa nombres descriptivos con fechas</li>
+                                <li>Descarga respaldos importantes externamente</li>
+                                <li>Elimina respaldos obsoletos regularmente</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Snapshot Manager Modal -->
+        <div v-if="showSnapshotManager" class="modal-overlay" @click.self="showSnapshotManager = false">
+            <div class="modal-content snapshot-modal">
+                <div class="modal-header">
+                    <h2>💾 Gestión de Respaldos</h2>
+                    <button @click="showSnapshotManager = false" class="modal-close">×</button>
+                </div>
+                
+                <!-- Create New Snapshot -->
+                <div class="snapshot-create">
+                    <h3>Crear Nuevo Respaldo</h3>
+                    <div class="form-row">
+                        <input 
+                            type="text" 
+                            v-model="snapshotName" 
+                            placeholder="Nombre del respaldo..." 
+                            class="form-input"
+                            @keyup.enter="saveSnapshot('full')"
+                        >
+                        <button @click="saveSnapshot('full')" class="btn-primary">💾 Completo</button>
+                        <button @click="saveSnapshot('pariciones')" class="btn-secondary">🍼 Solo Pariciones</button>
+                        <button @click="saveSnapshot('ganado')" class="btn-secondary">🐮 Solo Inventario</button>
+                    </div>
+                </div>
+                
+                <!-- Saved Snapshots List -->
+                <div class="snapshots-list">
+                    <h3>Respaldos Guardados ({{ savedSnapshots.length }})</h3>
+                    <div v-if="savedSnapshots.length === 0" class="no-snapshots">
+                        No hay respaldos guardados
+                    </div>
+                    <div v-else class="snapshots-grid">
+                        <div v-for="snapshot in savedSnapshots" :key="snapshot.id" class="snapshot-card">
+                            <div class="snapshot-header">
+                                <h4>{{ snapshot.name }}</h4>
+                                <span class="snapshot-type" :class="'type-' + snapshot.type">
+                                    {{ snapshot.type === 'full' ? '💾 Completo' : 
+                                       snapshot.type === 'pariciones' ? '🍼 Pariciones' : '🐮 Inventario' }}
+                                </span>
+                            </div>
+                            <div class="snapshot-info">
+                                <p><strong>Fecha:</strong> {{ snapshot.date }}</p>
+                                <p v-if="snapshot.data.pariciones"><strong>Pariciones:</strong> {{ snapshot.data.pariciones.length }}</p>
+                                <p v-if="snapshot.data.ganado"><strong>Ganado:</strong> {{ snapshot.data.ganado.length }}</p>
+                            </div>
+                            <div class="snapshot-actions">
+                                <button @click="loadSnapshot(snapshot.id)" class="btn-load">📥 Cargar</button>
+                                <button @click="downloadSnapshot(snapshot.id)" class="btn-download">⬇️ Descargar</button>
+                                <button @click="deleteSnapshot(snapshot.id)" class="btn-delete">🗑️ Eliminar</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Modals -->
@@ -326,8 +680,8 @@
                         </div>
                     </div>
                     <div class="form-group">
-                        <label>Notas:</label>
-                        <textarea v-model="currentParicion.notes" rows="3" class="form-textarea"></textarea>
+                        <label>Cría Descripción:</label>
+                        <textarea v-model="currentParicion.criaDescripcion" rows="3" class="form-textarea"></textarea>
                     </div>
                     <div class="form-group">
                         <label>Foto:</label>
@@ -403,8 +757,12 @@
                         <input type="text" v-model="newGanado.origen" class="form-input">
                     </div>
                     <div class="form-group">
-                        <label>Notas:</label>
-                        <textarea v-model="newGanado.notas" rows="3" class="form-textarea"></textarea>
+                        <label>Comentarios:</label>
+                        <textarea v-model="newGanado.comentarios" rows="2" class="form-textarea"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Fechas:</label>
+                        <input type="text" v-model="newGanado.fechas" placeholder="Fechas importantes" class="form-input">
                     </div>
                     <button v-if="!editingGanado || ganadoHasChanges" type="submit" class="btn-save">
                         {{ editingGanado ? '✅ Actualizar Ganado' : '➕ Agregar Ganado' }}
@@ -431,14 +789,14 @@
                         <div class="preview-table">
                             <table>
                                 <thead>
-                                    <tr><th>Vaca</th><th>Género</th><th>Fecha</th><th>Notas</th></tr>
+                                    <tr><th>Vaca</th><th>Género</th><th>Fecha</th><th>Cría Descripción</th></tr>
                                 </thead>
                                 <tbody>
                                     <tr v-for="item in importPreview.slice(0, 5)" :key="item.id">
                                         <td>{{ item.vaca }}</td>
                                         <td>{{ item.gender }}</td>
                                         <td>{{ item.fecha }}</td>
-                                        <td>{{ item.notes }}</td>
+                                        <td>{{ item.criaDescripcion }}</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -475,8 +833,84 @@
                     <textarea v-model="ganadoData" rows="10" placeholder="Pega aquí los datos de ganado..." class="import-textarea"></textarea>
                     <button @click="parseGanadoData" class="btn-primary">📊 Procesar Datos</button>
                     <div v-if="ganadoPreview.length > 0" class="import-preview">
-                        <h3>Vista Previa Ganado</h3>
-                        <button @click="processGanadoData" class="btn-save">✅ Importar Ganado</button>
+                        <h3>Vista Previa Ganado ({{ ganadoPreview.length }} registros)</h3>
+                        
+                        <!-- Duplicates Warning -->
+                        <div v-if="ganadoDuplicates.length > 0" class="duplicates-warning">
+                            <h4>⚠️ Duplicados Encontrados ({{ ganadoDuplicates.length }})</h4>
+                            <p>Los siguientes registros ya existen y serán omitidos:</p>
+                            <div class="duplicates-table">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th colspan="5">Nuevo Registro</th>
+                                            <th colspan="5">Registro Existente</th>
+                                        </tr>
+                                        <tr>
+                                            <th>Animal</th><th>Origen</th><th>Tipo</th><th>Fechas</th><th>Comentarios</th>
+                                            <th>Animal</th><th>Origen</th><th>Tipo</th><th>Fechas</th><th>Comentarios</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="dup in ganadoDuplicates" :key="dup.new.id" class="duplicate-row">
+                                            <td>{{ dup.new.animal }}</td>
+                                            <td>{{ dup.new.origen }}</td>
+                                            <td>{{ dup.new.tipo }}</td>
+                                            <td>{{ dup.new.fechas || '-' }}</td>
+                                            <td>{{ dup.new.comentarios || '-' }}</td>
+                                            <td>{{ dup.existing.animal }}</td>
+                                            <td>{{ dup.existing.origen }}</td>
+                                            <td>{{ dup.existing.tipo }}</td>
+                                            <td>{{ dup.existing.fechas || '-' }}</td>
+                                            <td>{{ dup.existing.comentarios || '-' }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <!-- New Records Preview -->
+                        <div v-if="ganadoPreview.length - ganadoDuplicates.length > 0">
+                            <h4>✅ Registros Nuevos ({{ ganadoPreview.length - ganadoDuplicates.length }})</h4>
+                            <div class="preview-table">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Animal</th>
+                                            <th>Origen</th>
+                                            <th>Comentarios</th>
+                                            <th>Género</th>
+                                            <th>Tipo</th>
+                                            <th>Fechas</th>
+                                            <th>Estado</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="item in ganadoPreview.filter(g => !ganadoDuplicates.some(d => d.new.animal === g.animal && d.new.origen === g.origen && d.new.tipo === g.tipo && d.new.fechas === g.fechas && d.new.comentarios === g.comentarios)).slice(0, 5)" :key="item.id">
+                                            <td>{{ item.animal }}</td>
+                                            <td>{{ item.origen || '-' }}</td>
+                                            <td>{{ item.comentarios || '-' }}</td>
+                                            <td>{{ item.gender }}</td>
+                                            <td>{{ item.tipo }}</td>
+                                            <td>{{ item.fechas || '-' }}</td>
+                                            <td>{{ item.muerto_vendido === 'S' ? 'Muerto/Vendido' : 'Vivo' }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                <p v-if="ganadoPreview.length - ganadoDuplicates.length > 5" class="preview-note">
+                                    Mostrando los primeros 5 de {{ ganadoPreview.length - ganadoDuplicates.length }} registros nuevos
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div class="import-actions">
+                            <button v-if="ganadoPreview.length - ganadoDuplicates.length > 0" @click="processGanadoData" class="btn-save">
+                                ✅ Importar {{ ganadoPreview.length - ganadoDuplicates.length }} Registros Nuevos
+                            </button>
+                            <button v-else class="btn-secondary" disabled>
+                                No hay registros nuevos para importar
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -569,6 +1003,8 @@
                 <img :src="lightboxImage" alt="Imagen ampliada" class="lightbox-image">
             </div>
         </div>
+        
+        </div> <!-- End main-app -->
     </div>
 
     <script src="app.js"></script>
