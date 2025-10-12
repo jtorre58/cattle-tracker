@@ -434,6 +434,19 @@ createApp({
     },
     
     methods: {
+        async waitForAWS() {
+            // Wait up to 10 seconds for AWS to initialize
+            for (let i = 0; i < 20; i++) {
+                if (window.awsReady || (window.dynamodb && window.s3)) {
+                    console.log('✅ AWS ready for data loading');
+                    return;
+                }
+                console.log(`⏳ Waiting for AWS... attempt ${i + 1}/20`);
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+            console.warn('⚠️ AWS not ready, proceeding with localStorage fallback');
+        },
+        
         addAnimal() {
             const animal = {
                 id: Date.now().toString(),
@@ -1407,6 +1420,9 @@ createApp({
     },
     
     async mounted() {
+        // Wait for AWS to be ready with retry mechanism
+        await this.waitForAWS();
+        
         // Load users from database
         this.users = await db.load('cattle_users') || [];
         
