@@ -1026,7 +1026,7 @@ Toro1, Compra, Reproductor, M, T, 12/2022, N</pre>
         let s3 = null;
         let awsReady = false;
         
-        function initAWS() {
+        async function initAWS() {
             console.log('Attempting AWS init...');
             console.log('AWS object:', typeof AWS);
             
@@ -1067,11 +1067,11 @@ Toro1, Compra, Reproductor, M, T, 12/2022, N</pre>
         
         // Try multiple times to initialize
         let initAttempts = 0;
-        function tryInit() {
+        async function tryInit() {
             initAttempts++;
             console.log(`Init attempt ${initAttempts}`);
             
-            if (initAWS()) {
+            if (await initAWS()) {
                 console.log('✅ AWS services ready!');
                 return;
             }
@@ -1084,8 +1084,8 @@ Toro1, Compra, Reproductor, M, T, 12/2022, N</pre>
         }
         
         // Start trying immediately and after page load
-        tryInit();
-        window.addEventListener('load', tryInit);
+        (async () => await tryInit())();
+        window.addEventListener('load', () => tryInit());
 
         // Clear localStorage to free up space (data is safe in DynamoDB)
         window.clearLocalStorage = function() {
