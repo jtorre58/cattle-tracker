@@ -1,9 +1,4 @@
 {
-  "functions": {
-    "api/env.js": {
-      "runtime": "nodejs20.x"
-    }
-  },
   "rewrites": [
     {
       "source": "/js/env.js",
