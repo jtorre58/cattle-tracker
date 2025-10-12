@@ -5,10 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🐄 Sistema de Gestión Ganadera</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="aws-sdk.min.js"></script>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div id="app">
+        <!-- Loading Indicator -->
+        <div v-if="loading" class="loading-overlay">
+            <div class="loading-spinner">
+                <div class="spinner"></div>
+                <p>Guardando datos...</p>
+            </div>
+        </div>
+        
         <!-- User Selection Screen -->
         <div v-if="showUserSelection" class="user-selection-screen">
             <div class="user-selection-container">
@@ -270,7 +279,7 @@
                                         <td class="cell-date">{{ paricion.fecha }}</td>
                                         <td class="cell-notes">{{ paricion.criaDescripcion || '-' }}</td>
                                         <td class="cell-image">
-                                            <img v-if="paricion.image" :src="paricion.image" alt="Foto" class="table-image" @click="openImageLightbox(paricion.image)">
+                                            <img v-if="paricion.image || paricion.imageUrl" :src="paricion.image || paricion.imageUrl" alt="Foto" class="table-image" @click="openImageLightbox(paricion.image || paricion.imageUrl)">
                                             <span v-else class="no-image">📷</span>
                                         </td>
                                         <td class="cell-actions">
@@ -1007,6 +1016,437 @@ Toro1, Compra, Reproductor, M, T, 12/2022, N</pre>
         </div> <!-- End main-app -->
     </div>
 
+    <script>
+        // Debug AWS SDK loading
+        console.log('Checking AWS SDK...');
+        console.log('AWS available:', typeof AWS !== 'undefined');
+        
+        // Initialize AWS services
+        let dynamodb = null;
+        let s3 = null;
+        let awsReady = false;
+        
+        function initAWS() {
+            console.log('Attempting AWS init...');
+            console.log('AWS object:', typeof AWS);
+            
+            if (typeof AWS !== 'undefined') {
+                console.log('AWS.DynamoDB:', typeof AWS.DynamoDB);
+                console.log('AWS.S3:', typeof AWS.S3);
+                
+                try {
+                    // Load environment variables from Vercel
+                    const envResponse = await fetch('/js/env.js');
+                    const envScript = await envResponse.text();
+                    eval(envScript);
+                    
+                    if (!window.ENV || !window.ENV.accessKeyId || !window.ENV.secretAccessKey) {
+                        throw new Error('AWS credentials not available');
+                    }
+                    
+                    AWS.config.update({
+                        region: 'us-east-1',
+                        accessKeyId: window.ENV.accessKeyId,
+                        secretAccessKey: window.ENV.secretAccessKey
+                    });
+                    
+                    dynamodb = new AWS.DynamoDB.DocumentClient();
+                    s3 = new AWS.S3();
+                    awsReady = true;
+                    console.log('✅ AWS services initialized successfully');
+                    return true;
+                } catch (error) {
+                    console.error('❌ AWS initialization failed:', error);
+                    return false;
+                }
+            } else {
+                console.log('❌ AWS SDK not loaded');
+                return false;
+            }
+        }
+        
+        // Try multiple times to initialize
+        let initAttempts = 0;
+        function tryInit() {
+            initAttempts++;
+            console.log(`Init attempt ${initAttempts}`);
+            
+            if (initAWS()) {
+                console.log('✅ AWS services ready!');
+                return;
+            }
+            
+            if (initAttempts < 5) {
+                setTimeout(tryInit, 1000);
+            } else {
+                console.warn('⚠️ Giving up on AWS SDK, using localStorage only');
+            }
+        }
+        
+        // Start trying immediately and after page load
+        tryInit();
+        window.addEventListener('load', tryInit);
+
+        // Clear localStorage to free up space (data is safe in DynamoDB)
+        window.clearLocalStorage = function() {
+            if (!awsReady) {
+                alert('Cannot clear localStorage - DynamoDB not available as backup!');
+                return;
+            }
+            
+            if (confirm('Clear local storage? (Data will remain safe in cloud)')) {
+                const keys = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key && key.startsWith('cattle_')) {
+                        keys.push(key);
+                    }
+                }
+                
+                keys.forEach(key => localStorage.removeItem(key));
+                console.log(`🧹 Cleared ${keys.length} items from localStorage`);
+                alert(`Cleared ${keys.length} items from local storage. Data remains safe in cloud.`);
+            }
+        };
+
+        // Migration function to sync localStorage to DynamoDB
+        window.migrateToCloud = async function() {
+            if (!awsReady) {
+                alert('DynamoDB not available');
+                return;
+            }
+            
+            console.log('🔄 Starting migration to DynamoDB...');
+            let migrated = 0;
+            
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith('cattle_')) {
+                    try {
+                        const data = localStorage.getItem(key);
+                        const parsedData = JSON.parse(data);
+                        
+                        await dynamodb.put({
+                            TableName: 'CattleData',
+                            Item: {
+                                id: key,
+                                data: parsedData,
+                                timestamp: Date.now()
+                            }
+                        }).promise();
+                        
+                        migrated++;
+                        console.log('✅ Migrated:', key);
+                    } catch (error) {
+                        console.error('❌ Migration failed for:', key, error);
+                    }
+                }
+            }
+            
+            console.log(`🎉 Migration complete! ${migrated} items synced to DynamoDB`);
+            alert(`Migration complete! ${migrated} items synced to cloud.`);
+        };
+
+        // Database with DynamoDB + localStorage
+        // S3 image storage functions
+        const BUCKET_NAME = 'cattle-tracker-images-2025';
+        
+        async function uploadImageToS3(imageData, fileName) {
+            if (!awsReady || !s3) {
+                throw new Error('S3 not available');
+            }
+            
+            // Convert base64 to blob
+            const base64Data = imageData.replace(/^data:image\/\w+;base64,/, '');
+            const buffer = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+            
+            const params = {
+                Bucket: BUCKET_NAME,
+                Key: fileName,
+                Body: buffer,
+                ContentType: 'image/jpeg',
+                ACL: 'private'
+            };
+            
+            const result = await s3.upload(params).promise();
+            console.log('✅ Image uploaded to S3:', fileName);
+            return result.Location;
+        }
+        
+        async function getImageFromS3(fileName) {
+            if (!awsReady || !s3) {
+                return null;
+            }
+            
+            try {
+                const params = {
+                    Bucket: BUCKET_NAME,
+                    Key: fileName,
+                    Expires: 3600 // 1 hour signed URL
+                };
+                
+                const url = s3.getSignedUrl('getObject', params);
+                console.log('✅ Generated S3 signed URL:', fileName);
+                return url;
+            } catch (error) {
+                console.error('❌ Failed to get S3 image:', error);
+                return null;
+            }
+        }
+        
+        async function deleteImageFromS3(fileName) {
+            if (!awsReady || !s3) {
+                return;
+            }
+            
+            try {
+                const params = {
+                    Bucket: BUCKET_NAME,
+                    Key: fileName
+                };
+                
+                await s3.deleteObject(params).promise();
+                console.log('✅ Image deleted from S3:', fileName);
+            } catch (error) {
+                console.error('❌ Failed to delete S3 image:', error);
+            }
+        }
+
+        // Helper function to process images for S3 storage
+        async function processImagesForS3(data) {
+            if (!Array.isArray(data)) return data;
+            
+            const processedData = [];
+            
+            for (const item of data) {
+                const processedItem = { ...item };
+                
+                if (item.image && item.image.startsWith('data:image/')) {
+                    try {
+                        // Generate unique filename
+                        const fileName = `cattle_${item.id || Date.now()}_${Math.random().toString(36).substr(2, 9)}.jpg`;
+                        
+                        // Upload to S3
+                        const s3Url = await uploadImageToS3(item.image, fileName);
+                        
+                        // Replace base64 with S3 reference
+                        processedItem.image = null; // Remove base64
+                        processedItem.imageS3 = fileName; // Store S3 key
+                        processedItem.imageUrl = s3Url; // Store S3 URL for immediate use
+                        
+                        console.log('📸 Moved image to S3:', fileName);
+                    } catch (error) {
+                        console.warn('⚠️ S3 upload failed, keeping base64:', error);
+                        // Keep original base64 as fallback
+                    }
+                }
+                
+                processedData.push(processedItem);
+            }
+            
+            return processedData;
+        }
+        
+        // Helper function to load images from S3
+        async function loadImagesFromS3(data) {
+            if (!Array.isArray(data)) return data;
+            
+            const loadedData = [];
+            
+            for (const item of data) {
+                const loadedItem = { ...item };
+                
+                if (item.imageS3 && !item.image) {
+                    try {
+                        // Get signed URL for display
+                        const signedUrl = await getImageFromS3(item.imageS3);
+                        if (signedUrl) {
+                            loadedItem.imageUrl = signedUrl;
+                        }
+                    } catch (error) {
+                        console.warn('⚠️ Failed to load S3 image:', error);
+                    }
+                }
+                
+                loadedData.push(loadedItem);
+            }
+            
+            return loadedData;
+        }
+        function compressImage(base64, maxSize = 50000) {
+            if (!base64 || !base64.startsWith('data:image/')) return base64;
+            
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    
+                    // Calculate new dimensions (max 800px)
+                    let { width, height } = this;
+                    const maxDim = 800;
+                    if (width > maxDim || height > maxDim) {
+                        if (width > height) {
+                            height = (height * maxDim) / width;
+                            width = maxDim;
+                        } else {
+                            width = (width * maxDim) / height;
+                            height = maxDim;
+                        }
+                    }
+                    
+                    canvas.width = width;
+                    canvas.height = height;
+                    ctx.drawImage(this, 0, 0, width, height);
+                    
+                    // Compress with quality adjustment
+                    let quality = 0.7;
+                    let compressed = canvas.toDataURL('image/jpeg', quality);
+                    
+                    // Reduce quality if still too large
+                    while (compressed.length > maxSize && quality > 0.1) {
+                        quality -= 0.1;
+                        compressed = canvas.toDataURL('image/jpeg', quality);
+                    }
+                    
+                    resolve(compressed);
+                };
+                img.src = base64;
+            });
+        }
+
+        // Helper function to split large arrays
+        function splitLargeData(key, data) {
+            const dataStr = JSON.stringify(data);
+            const maxSize = 300000; // 300KB limit for safety
+            
+            if (dataStr.length <= maxSize) {
+                return [{ key, data }];
+            }
+            
+            // Split array into chunks
+            const chunks = [];
+            const chunkSize = Math.ceil(data.length / Math.ceil(dataStr.length / maxSize));
+            
+            for (let i = 0; i < data.length; i += chunkSize) {
+                chunks.push({
+                    key: `${key}_chunk_${Math.floor(i / chunkSize)}`,
+                    data: data.slice(i, i + chunkSize)
+                });
+            }
+            
+            // Add metadata chunk
+            chunks.push({
+                key: `${key}_meta`,
+                data: {
+                    isChunked: true,
+                    totalChunks: chunks.length - 1,
+                    originalKey: key
+                }
+            });
+            
+            return chunks;
+        }
+
+        const db = {
+            async save(key, data) {
+                // Process images for S3 storage
+                let processedData = data;
+                if (awsReady && s3) {
+                    try {
+                        processedData = await processImagesForS3(data);
+                    } catch (error) {
+                        console.warn('⚠️ S3 processing failed, using original data:', error);
+                    }
+                }
+                
+                if (awsReady && dynamodb) {
+                    try {
+                        await dynamodb.put({
+                            TableName: 'CattleData',
+                            Item: {
+                                id: key,
+                                data: processedData,
+                                timestamp: Date.now()
+                            }
+                        }).promise();
+                        console.log('✅ Saved to DynamoDB:', key);
+                        
+                        // Save small items to localStorage as backup
+                        try {
+                            const dataStr = JSON.stringify(processedData);
+                            if (dataStr.length < 50000) {
+                                localStorage.setItem(key, dataStr);
+                            }
+                        } catch (quotaError) {
+                            console.warn('⚠️ localStorage full, DynamoDB only:', key);
+                        }
+                        return;
+                    } catch (error) {
+                        console.error('❌ DynamoDB save failed:', error);
+                    }
+                }
+                
+                // Fallback to localStorage
+                try {
+                    localStorage.setItem(key, JSON.stringify(data));
+                    console.log('💾 Saved to localStorage:', key);
+                } catch (quotaError) {
+                    console.error('❌ Storage quota exceeded:', key);
+                    alert('Storage full! Data may not be saved properly.');
+                }
+            },
+            
+            async load(key) {
+                if (awsReady && dynamodb) {
+                    try {
+                        const result = await dynamodb.get({
+                            TableName: 'CattleData',
+                            Key: { id: key }
+                        }).promise();
+                        
+                        if (result.Item) {
+                            console.log('✅ Loaded from DynamoDB:', key);
+                            
+                            // Load S3 images if available
+                            const dataWithImages = await loadImagesFromS3(result.Item.data);
+                            return dataWithImages;
+                        }
+                    } catch (error) {
+                        console.error('❌ DynamoDB load failed:', error);
+                    }
+                }
+                
+                // Fallback to localStorage
+                const data = localStorage.getItem(key);
+                if (!data) return null;
+                
+                try {
+                    console.log('📂 Loaded from localStorage:', key);
+                    return JSON.parse(data);
+                } catch (error) {
+                    return data;
+                }
+            },
+            
+            async delete(key) {
+                if (awsReady && dynamodb) {
+                    try {
+                        await dynamodb.delete({
+                            TableName: 'CattleData',
+                            Key: { id: key }
+                        }).promise();
+                        console.log('✅ Deleted from DynamoDB:', key);
+                    } catch (error) {
+                        console.error('❌ DynamoDB delete failed:', error);
+                    }
+                }
+                
+                localStorage.removeItem(key);
+                console.log('🗑️ Deleted from localStorage:', key);
+            }
+        };
+    </script>
     <script src="app.js"></script>
 </body>
 </html>

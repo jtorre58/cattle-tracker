@@ -1,0 +1,13 @@
+{
+  "functions": {
+    "api/env.js": {
+      "runtime": "nodejs18.x"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/js/env.js",
+      "destination": "/api/env"
+    }
+  ]
+}

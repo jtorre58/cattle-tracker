@@ -5,7 +5,7 @@ createApp({
         return {
             // User Management
             currentUser: null,
-            users: JSON.parse(localStorage.getItem('cattle_users')) || [],
+            users: [],
             showUserSelection: true,
             newUserName: '',
             
@@ -81,6 +81,9 @@ createApp({
             ganadoPreview: [],
             ganadoDuplicates: [],
             editingGanado: null,
+            
+            // Loading state
+            loading: false,
             
             // Ganado Form
             newGanado: {
@@ -554,7 +557,7 @@ createApp({
             return this.duplicates.some(d => d.vaca === paricion.vaca && d.fecha === paricion.fecha);
         },
         
-        processCsvData() {
+        async processCsvData() {
             const newPariciones = this.csvPreview.filter(newP => 
                 !this.duplicates.some(d => d.vaca === newP.vaca && d.fecha === newP.fecha)
             );
@@ -566,7 +569,7 @@ createApp({
             });
             
             this.addActivity(`Imported ${newPariciones.length} pariciones from CSV${this.duplicates.length > 0 ? ` (${this.duplicates.length} duplicates skipped)` : ''}`);
-            this.saveData();
+            await this.saveData();
             
             this.showCsvUpload = false;
             this.csvPreview = [];
@@ -668,11 +671,11 @@ createApp({
             this.dateTo = '';
         },
         
-        clearAllData() {
+        async clearAllData() {
             if (this.activeTab === 'pariciones') {
                 if (confirm('¿Estás seguro de que quieres eliminar TODOS los datos de Pariciones? Esta acción no se puede deshacer.')) {
                     this.pariciones = [];
-                    this.saveData();
+                    await this.saveData();
                     alert('Datos de Pariciones eliminados exitosamente!');
                 }
             } else if (this.activeTab === 'ganado') {
@@ -709,7 +712,7 @@ createApp({
             if (!file) return;
             
             const reader = new FileReader();
-            reader.onload = (e) => {
+            reader.onload = async (e) => {
                 try {
                     const backupData = JSON.parse(e.target.result);
                     
@@ -724,7 +727,7 @@ createApp({
                         this.animals = backupData.animals;
                         this.pariciones = backupData.pariciones;
                         this.activities = backupData.activities;
-                        this.saveData();
+                        await this.saveData();
                         
                         alert('Backup imported successfully!');
                         this.addActivity('Imported data backup');
@@ -742,7 +745,7 @@ createApp({
         },
         
         // Ganado Methods
-        addGanado() {
+        async addGanado() {
             if (this.editingGanado) {
                 // Update existing ganado
                 const index = this.ganado.findIndex(g => g.id === this.editingGanado.id);
@@ -760,9 +763,10 @@ createApp({
                 };
                 this.ganado.push(ganado);
                 this.addActivity(`Agregado ganado: ${ganado.animal}`);
+                await this.saveData();
             }
             
-            this.saveData();
+            await this.saveData();
             this.showAddGanado = false;
             this.resetGanadoForm();
         },
@@ -841,7 +845,7 @@ createApp({
             }
         },
         
-        processGanadoData() {
+        async processGanadoData() {
             const importCount = this.ganadoPreview.length;
             
             // Filter out duplicates
@@ -863,7 +867,7 @@ createApp({
             const duplicateCount = this.ganadoDuplicates.length;
             
             this.addActivity(`Imported ${newRecords.length} ganado records${duplicateCount > 0 ? ` (${duplicateCount} duplicates skipped)` : ''}`);
-            this.saveData();
+            await this.saveData();
             
             this.showGanadoImport = false;
             this.ganadoData = '';
@@ -951,7 +955,7 @@ createApp({
             return this.importDuplicates.some(d => d.vaca === paricion.vaca && d.fecha === paricion.fecha);
         },
         
-        processSpreadsheetData() {
+        async processSpreadsheetData() {
             const newPariciones = this.importPreview.filter(newP => 
                 !this.importDuplicates.some(d => d.vaca === newP.vaca && d.fecha === newP.fecha)
             );
@@ -963,7 +967,7 @@ createApp({
             });
             
             this.addActivity(`Imported ${newPariciones.length} pariciones from spreadsheet${this.importDuplicates.length > 0 ? ` (${this.importDuplicates.length} duplicates skipped)` : ''}`);
-            this.saveData();
+            await this.saveData();
             
             this.showSpreadsheetImport = false;
             this.spreadsheetData = '';
@@ -1027,7 +1031,7 @@ createApp({
             this.ganadoGenderFilter = 'all';
         },
         
-        saveParicion() {
+        async saveParicion() {
             if (this.editingParicion) {
                 // Update existing paricion
                 const index = this.pariciones.findIndex(p => p.id === this.editingParicion.id);
@@ -1052,7 +1056,7 @@ createApp({
                 this.addActivity(`Agregada parición: ${paricion.vaca}`);
             }
             
-            this.saveData();
+            await this.saveData();
             this.showAddParicion = false;
             this.resetParicionForm();
         },
@@ -1106,7 +1110,7 @@ createApp({
         },
         
         // Snapshot/Backup Methods
-        saveSnapshot(type = 'full') {
+        async saveSnapshot(type = 'full') {
             if (!this.snapshotName.trim()) {
                 alert('Por favor ingresa un nombre para el respaldo');
                 return;
@@ -1145,12 +1149,12 @@ createApp({
             }
             
             this.savedSnapshots.push(snapshot);
-            this.saveSnapshots();
+            await this.saveSnapshots();
             this.snapshotName = '';
             alert(`Respaldo "${snapshot.name}" guardado exitosamente`);
         },
         
-        loadSnapshot(snapshotId) {
+        async loadSnapshot(snapshotId) {
             const snapshot = this.savedSnapshots.find(s => s.id === snapshotId);
             if (!snapshot) {
                 alert('Respaldo no encontrado');
@@ -1167,12 +1171,12 @@ createApp({
                 this.ganado = [...snapshot.data.ganado];
             }
             
-            this.saveData();
+            await this.saveData();
             this.addActivity(`Cargado respaldo: ${snapshot.name}`);
             alert(`Respaldo "${snapshot.name}" cargado exitosamente`);
         },
         
-        deleteSnapshot(snapshotId) {
+        async deleteSnapshot(snapshotId) {
             const snapshot = this.savedSnapshots.find(s => s.id === snapshotId);
             if (!snapshot) return;
             
@@ -1180,7 +1184,7 @@ createApp({
             if (!confirmDelete) return;
             
             this.savedSnapshots = this.savedSnapshots.filter(s => s.id !== snapshotId);
-            this.saveSnapshots();
+            await this.saveSnapshots();
             alert(`Respaldo "${snapshot.name}" eliminado`);
         },
         
@@ -1198,9 +1202,9 @@ createApp({
             URL.revokeObjectURL(url);
         },
         
-        saveSnapshots() {
+        async saveSnapshots() {
             if (!this.currentUser) return;
-            localStorage.setItem(`cattle_${this.currentUser.id}_snapshots`, JSON.stringify(this.savedSnapshots));
+            await db.save(`cattle_${this.currentUser.id}_snapshots`, this.savedSnapshots);
         },
         
         loadSnapshots() {
@@ -1212,7 +1216,7 @@ createApp({
         },
         
         // User Management Methods
-        initializeUsers() {
+        async initializeUsers() {
             // Create Alex as default user if no users exist
             if (this.users.length === 0) {
                 const alexUser = {
@@ -1221,7 +1225,7 @@ createApp({
                     createdAt: new Date().toISOString()
                 };
                 this.users.push(alexUser);
-                this.saveUsers();
+                await this.saveUsers();
                 
                 // Migrate existing data to Alex
                 this.migrateExistingDataToAlex();
@@ -1248,17 +1252,17 @@ createApp({
             }
         },
         
-        selectUser(userId) {
+        async selectUser(userId) {
             const user = this.users.find(u => u.id === userId);
             if (!user) return;
             
             this.currentUser = user;
             this.showUserSelection = false;
-            this.loadUserData();
-            localStorage.setItem('cattle_current_user', userId);
+            await this.loadUserData();
+            await db.save('cattle_current_user', userId);
         },
         
-        createNewUser() {
+        async createNewUser() {
             if (!this.newUserName.trim()) {
                 alert('Por favor ingresa un nombre de usuario');
                 return;
@@ -1272,39 +1276,39 @@ createApp({
             };
             
             this.users.push(newUser);
-            this.saveUsers();
+            await this.saveUsers();
             this.newUserName = '';
             
             // Initialize empty data for new user
-            localStorage.setItem(`cattle_${userId}_pariciones`, JSON.stringify([]));
-            localStorage.setItem(`cattle_${userId}_ganado`, JSON.stringify([]));
-            localStorage.setItem(`cattle_${userId}_snapshots`, JSON.stringify([]));
+            await db.save(`cattle_${userId}_pariciones`, []);
+            await db.save(`cattle_${userId}_ganado`, []);
+            await db.save(`cattle_${userId}_snapshots`, []);
             
             alert(`Usuario "${newUser.name}" creado exitosamente`);
         },
         
-        loadUserData() {
+        async loadUserData() {
             if (!this.currentUser) return;
             
             const userId = this.currentUser.id;
-            this.pariciones = JSON.parse(localStorage.getItem(`cattle_${userId}_pariciones`)) || [];
-            this.ganado = JSON.parse(localStorage.getItem(`cattle_${userId}_ganado`)) || [];
-            this.savedSnapshots = JSON.parse(localStorage.getItem(`cattle_${userId}_snapshots`)) || [];
-            this.activities = JSON.parse(localStorage.getItem(`cattle_${userId}_activities`)) || [];
+            this.pariciones = await db.load(`cattle_${userId}_pariciones`) || [];
+            this.ganado = await db.load(`cattle_${userId}_ganado`) || [];
+            this.savedSnapshots = await db.load(`cattle_${userId}_snapshots`) || [];
+            this.activities = await db.load(`cattle_${userId}_activities`) || [];
         },
         
-        saveUsers() {
-            localStorage.setItem('cattle_users', JSON.stringify(this.users));
+        async saveUsers() {
+            await db.save('cattle_users', this.users);
         },
         
-        logoutUser() {
+        async logoutUser() {
             this.currentUser = null;
             this.showUserSelection = true;
             this.pariciones = [];
             this.ganado = [];
             this.savedSnapshots = [];
             this.activities = [];
-            localStorage.removeItem('cattle_current_user');
+            await db.delete('cattle_current_user');
         },
         
         addTestData() {
@@ -1390,29 +1394,36 @@ createApp({
             return [...this.pariciones, ...this.ganado].filter(a => a.vaca || a.animal);
         },
 
-        saveData() {
+        async saveData() {
             if (!this.currentUser) return;
             
             const userId = this.currentUser.id;
-            localStorage.setItem(`cattle_${userId}_pariciones`, JSON.stringify(this.pariciones));
-            localStorage.setItem(`cattle_${userId}_ganado`, JSON.stringify(this.ganado));
-            localStorage.setItem(`cattle_${userId}_activities`, JSON.stringify(this.activities));
+            await Promise.all([
+                db.save(`cattle_${userId}_pariciones`, this.pariciones),
+                db.save(`cattle_${userId}_ganado`, this.ganado),
+                db.save(`cattle_${userId}_activities`, this.activities)
+            ]);
         }
     },
     
-    mounted() {
-        // Initialize user system
-        this.initializeUsers();
+    async mounted() {
+        // Load users from database
+        this.users = await db.load('cattle_users') || [];
+        
+        // Initialize user system if no users exist
+        if (this.users.length === 0) {
+            await this.initializeUsers();
+        }
         
         // Check if there's a previously selected user
-        const savedUserId = localStorage.getItem('cattle_current_user');
+        const savedUserId = await db.load('cattle_current_user');
         if (savedUserId && this.users.find(u => u.id === savedUserId)) {
-            this.selectUser(savedUserId);
+            await this.selectUser(savedUserId);
         } else if (this.users.length > 0) {
             // Default to Alex if no saved user
             const alexUser = this.users.find(u => u.name === 'Alex');
             if (alexUser) {
-                this.selectUser(alexUser.id);
+                await this.selectUser(alexUser.id);
             }
         }
         

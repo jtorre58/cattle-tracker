@@ -1,0 +1,14 @@
+{
+  "name": "cattle-tracker",
+  "version": "1.0.0",
+  "description": "Sistema de Gestión Ganadera",
+  "main": "index.html",
+  "scripts": {
+    "dev": "python3 -m http.server 8080",
+    "build": "echo 'Static site - no build needed'",
+    "deploy": "vercel --prod"
+  },
+  "keywords": ["cattle", "livestock", "management", "vue"],
+  "author": "Your Name",
+  "license": "MIT"
+}
