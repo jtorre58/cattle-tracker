@@ -1552,3 +1552,230 @@ body {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
+
+/* Enhanced Mobile Responsiveness */
+@media (max-width: 480px) {
+    /* Base layout adjustments */
+    body {
+        font-size: 14px;
+    }
+    
+    .container {
+        padding: 10px;
+        margin: 0;
+    }
+    
+    /* Header improvements */
+    .header-container {
+        padding: 10px;
+        gap: 10px;
+    }
+    
+    .header-container h1 {
+        font-size: 1.5rem;
+        text-align: center;
+    }
+    
+    /* Navigation improvements */
+    .nav-tabs {
+        flex-wrap: wrap;
+        gap: 5px;
+    }
+    
+    .nav-tabs button {
+        flex: 1;
+        min-width: 120px;
+        padding: 8px 12px;
+        font-size: 12px;
+    }
+    
+    /* Form improvements */
+    .form-row {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .form-group {
+        width: 100%;
+    }
+    
+    input, select, textarea {
+        width: 100%;
+        padding: 12px;
+        font-size: 16px; /* Prevents zoom on iOS */
+    }
+    
+    /* Button improvements */
+    .btn {
+        width: 100%;
+        padding: 12px;
+        font-size: 14px;
+        margin-bottom: 10px;
+    }
+    
+    .btn-group {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    /* Table improvements */
+    .table-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    table {
+        min-width: 600px;
+        font-size: 12px;
+    }
+    
+    th, td {
+        padding: 8px 4px;
+        white-space: nowrap;
+    }
+    
+    /* Modal improvements */
+    .modal-content {
+        width: 95vw;
+        max-width: none;
+        margin: 20px auto;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+    
+    /* Image gallery improvements */
+    .image-gallery {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+    
+    .image-item {
+        height: 120px;
+    }
+    
+    /* Filter improvements */
+    .filter-container {
+        padding: 10px;
+    }
+    
+    .filter-row {
+        gap: 10px;
+    }
+    
+    /* Stats improvements */
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+    
+    .stat-card {
+        padding: 15px;
+    }
+    
+    .stat-card h3 {
+        font-size: 1.2rem;
+    }
+    
+    /* User selection improvements */
+    .users-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .user-card {
+        padding: 15px;
+    }
+    
+    /* Touch-friendly improvements */
+    .clickable, button, .btn {
+        min-height: 44px; /* Apple's recommended touch target */
+        min-width: 44px;
+    }
+    
+    /* Spacing improvements */
+    .section {
+        margin-bottom: 20px;
+        padding: 15px;
+    }
+    
+    /* Text improvements */
+    .small-text {
+        font-size: 12px;
+    }
+    
+    /* Loading improvements */
+    .loading-overlay {
+        padding: 20px;
+    }
+    
+    .loading-spinner {
+        transform: scale(0.8);
+    }
+}
+
+/* Extra small devices */
+@media (max-width: 320px) {
+    .header-container h1 {
+        font-size: 1.2rem;
+    }
+    
+    .nav-tabs button {
+        min-width: 100px;
+        font-size: 11px;
+        padding: 6px 8px;
+    }
+    
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .image-gallery {
+        grid-template-columns: 1fr;
+    }
+    
+    table {
+        font-size: 11px;
+    }
+    
+    th, td {
+        padding: 6px 2px;
+    }
+}
+
+/* Landscape mobile improvements */
+@media (max-width: 768px) and (orientation: landscape) {
+    .modal-content {
+        max-height: 80vh;
+    }
+    
+    .nav-tabs {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .nav-tabs button {
+        flex-shrink: 0;
+    }
+}
+
+/* Touch device improvements */
+@media (hover: none) and (pointer: coarse) {
+    /* Remove hover effects on touch devices */
+    .btn:hover,
+    .nav-tabs button:hover,
+    .user-card:hover {
+        transform: none;
+        box-shadow: inherit;
+    }
+    
+    /* Add active states for better feedback */
+    .btn:active {
+        transform: scale(0.98);
+        opacity: 0.8;
+    }
+    
+    .nav-tabs button:active {
+        background-color: var(--primary-color);
+        color: white;
+    }
+}
