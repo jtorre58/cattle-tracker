@@ -2,14 +2,52 @@
 
 Un sistema web moderno y completo para el manejo, seguimiento y administración de ganado y pariciones con almacenamiento en la nube.
 
+## ⚡ Optimización de Startup (v2.0)
+
+**Nueva experiencia de carga ultra-rápida:**
+- ✅ **Inicio Instantáneo**: La interfaz aparece inmediatamente (0 segundos vs 10+ segundos anteriormente)
+- ✅ **Carga Progresiva**: Los datos se cargan en segundo plano mientras el usuario interactúa
+- ✅ **Mejor UX**: Indicadores de carga y opción de continuación rápida para usuarios recurrentes
+- ✅ **Manejo Robusto**: Funciona incluso si AWS no está disponible
+
 ## 📋 Tabla de Contenidos
 
 - [Características Principales](#-características-principales)
 - [Inicio Rápido](#-inicio-rápido)
+- [Configuración Local](#-configuración-local)
 - [Documentación Detallada](#-documentación-detallada)
 - [Estructura del Proyecto](#-estructura-del-proyecto)
 - [Tecnologías](#-tecnologías)
 - [Compatibilidad](#-compatibilidad)
+
+## 🚀 Inicio Rápido
+
+### Configuración Local
+
+1. **Clonar y configurar**:
+   ```bash
+   git clone <repository-url>
+   cd cattle-tracker
+   cp config.example.js config.js
+   # Editar config.js con tus credenciales AWS
+   ```
+
+2. **Iniciar servidor**:
+   ```bash
+   python3 -m http.server 8000
+   ```
+
+3. **Abrir aplicación**:
+   ```
+   http://localhost:8000
+   ```
+
+## 🔒 Configuración Segura
+
+El sistema usa un archivo de configuración local que **nunca se commitea**:
+
+- `config.example.js` - Plantilla (segura para commit)
+- `config.js` - Configuración real (en .gitignore)
 
 ## ✨ Características Principales
 

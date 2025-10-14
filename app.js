@@ -84,6 +84,8 @@ createApp({
             
             // Loading state
             loading: false,
+            loadingUsers: true,
+            lastSelectedUser: null,
             
             // Ganado Form
             newGanado: {
@@ -434,6 +436,40 @@ createApp({
     },
     
     methods: {
+        async initializeAppInBackground() {
+            try {
+                // Wait for AWS to be ready with retry mechanism
+                await this.waitForAWS();
+                
+                // Load users from database
+                this.users = await db.load('cattle_users') || [];
+                
+                // Initialize user system if no users exist
+                if (this.users.length === 0) {
+                    await this.initializeUsers();
+                }
+                
+                // Users are now loaded
+                this.loadingUsers = false;
+                
+                // Check if there's a previously selected user
+                const savedUserId = await db.load('cattle_current_user');
+                if (savedUserId && this.users.find(u => u.id === savedUserId)) {
+                    this.lastSelectedUser = this.users.find(u => u.id === savedUserId);
+                    // Don't auto-select, let user choose to continue or switch
+                    this.showUserSelection = true;
+                } else if (this.users.length > 0) {
+                    // Just ensure the user selection screen is visible
+                    this.showUserSelection = true;
+                }
+            } catch (error) {
+                console.error('Error initializing app:', error);
+                // Even if there's an error, show user selection and stop loading
+                this.loadingUsers = false;
+                this.showUserSelection = true;
+            }
+        },
+        
         async waitForAWS() {
             // Wait up to 10 seconds for AWS to initialize
             for (let i = 0; i < 20; i++) {
@@ -1271,8 +1307,23 @@ createApp({
             
             this.currentUser = user;
             this.showUserSelection = false;
-            await this.loadUserData();
-            await db.save('cattle_current_user', userId);
+            
+            // Show loading indicator while data loads
+            this.loading = true;
+            
+            try {
+                await this.loadUserData();
+                await db.save('cattle_current_user', userId);
+                
+                // Reprocess existing data to ensure years dropdown works
+                this.reprocessExistingData();
+            } catch (error) {
+                console.error('Error loading user data:', error);
+                alert('Error cargando datos del usuario. Intenta de nuevo.');
+                this.showUserSelection = true;
+            } finally {
+                this.loading = false;
+            }
         },
         
         async createNewUser() {
@@ -1420,30 +1471,10 @@ createApp({
     },
     
     async mounted() {
-        // Wait for AWS to be ready with retry mechanism
-        await this.waitForAWS();
+        // Show user selection immediately
+        this.showUserSelection = true;
         
-        // Load users from database
-        this.users = await db.load('cattle_users') || [];
-        
-        // Initialize user system if no users exist
-        if (this.users.length === 0) {
-            await this.initializeUsers();
-        }
-        
-        // Check if there's a previously selected user
-        const savedUserId = await db.load('cattle_current_user');
-        if (savedUserId && this.users.find(u => u.id === savedUserId)) {
-            await this.selectUser(savedUserId);
-        } else if (this.users.length > 0) {
-            // Default to Alex if no saved user
-            const alexUser = this.users.find(u => u.name === 'Alex');
-            if (alexUser) {
-                await this.selectUser(alexUser.id);
-            }
-        }
-        
-        // Reprocess existing data to ensure years dropdown works
-        this.reprocessExistingData();
+        // Initialize AWS and load data in background
+        this.initializeAppInBackground();
     }
 }).mount('#app');

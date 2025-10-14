@@ -6,6 +6,7 @@
     <title>🐄 Sistema de Gestión Ganadera</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="aws-sdk.min.js"></script>
+    <script src="config.js"></script>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -14,7 +15,8 @@
         <div v-if="loading" class="loading-overlay">
             <div class="loading-spinner">
                 <div class="spinner"></div>
-                <p>Guardando datos...</p>
+                <p v-if="currentUser">Cargando datos de {{ currentUser.name }}...</p>
+                <p v-else>Guardando datos...</p>
             </div>
         </div>
         
@@ -26,9 +28,32 @@
                     <p>Selecciona tu usuario para continuar</p>
                 </div>
                 
+                <!-- Quick continue for last user -->
+                <div v-if="lastSelectedUser && !loadingUsers" class="quick-continue">
+                    <h3>⚡ Continuar Rápido</h3>
+                    <div class="continue-card" @click="selectUser(lastSelectedUser.id)">
+                        <div class="user-avatar large">{{ lastSelectedUser.name.charAt(0).toUpperCase() }}</div>
+                        <div class="continue-info">
+                            <h4>Continuar como {{ lastSelectedUser.name }}</h4>
+                            <p>Última sesión activa</p>
+                        </div>
+                        <div class="continue-arrow">→</div>
+                    </div>
+                </div>
+                
                 <div class="user-list">
                     <h3>👥 Usuarios Existentes</h3>
-                    <div class="users-grid">
+                    
+                    <!-- Loading indicator for users -->
+                    <div v-if="loadingUsers" class="users-loading">
+                        <div class="loading-spinner-small">
+                            <div class="spinner-small"></div>
+                        </div>
+                        <p>Cargando usuarios...</p>
+                    </div>
+                    
+                    <!-- Users grid -->
+                    <div v-else-if="users.length > 0" class="users-grid">
                         <div v-for="user in users" :key="user.id" class="user-card" @click="selectUser(user.id)">
                             <div class="user-avatar">{{ user.name.charAt(0).toUpperCase() }}</div>
                             <div class="user-info">
@@ -36,6 +61,11 @@
                                 <p>Creado: {{ new Date(user.createdAt).toLocaleDateString('es-ES') }}</p>
                             </div>
                         </div>
+                    </div>
+                    
+                    <!-- No users message -->
+                    <div v-else class="no-users">
+                        <p>No hay usuarios registrados. Crea uno nuevo abajo.</p>
                     </div>
                 </div>
                 
@@ -1027,34 +1057,63 @@ Toro1, Compra, Reproductor, M, T, 12/2022, N</pre>
         let awsReady = false;
         
         async function initAWS() {
-            console.log('Attempting AWS init...');
+            console.log('🔧 Attempting AWS init...');
             console.log('AWS object:', typeof AWS);
+            console.log('AWS_CONFIG available:', !!window.AWS_CONFIG);
             
             if (typeof AWS !== 'undefined') {
                 console.log('AWS.DynamoDB:', typeof AWS.DynamoDB);
                 console.log('AWS.S3:', typeof AWS.S3);
                 
                 try {
-                    // Load environment variables from Vercel
-                    const envResponse = await fetch('/js/env.js');
-                    const envScript = await envResponse.text();
-                    eval(envScript);
-                    
-                    if (!window.ENV || !window.ENV.accessKeyId || !window.ENV.secretAccessKey) {
-                        throw new Error('AWS credentials not available');
+                    // Use local config if available, otherwise try Vercel env
+                    if (window.AWS_CONFIG) {
+                        console.log('📝 Using local config with region:', window.AWS_CONFIG.region);
+                        AWS.config.update({
+                            region: window.AWS_CONFIG.region,
+                            accessKeyId: window.AWS_CONFIG.accessKeyId,
+                            secretAccessKey: window.AWS_CONFIG.secretAccessKey
+                        });
+                        
+                        console.log('🔨 Creating DynamoDB DocumentClient...');
+                        dynamodb = new AWS.DynamoDB.DocumentClient();
+                        console.log('🔨 Creating S3 client...');
+                        s3 = new AWS.S3();
+                        awsReady = true;
+                        window.dynamodb = dynamodb;
+                        window.s3 = s3;
+                        window.awsReady = awsReady;
+                        console.log('✅ AWS services initialized with local config');
+                        return true;
                     }
                     
-                    AWS.config.update({
-                        region: 'us-east-1',
-                        accessKeyId: window.ENV.accessKeyId,
-                        secretAccessKey: window.ENV.secretAccessKey
-                    });
-                    
-                    dynamodb = new AWS.DynamoDB.DocumentClient();
-                    s3 = new AWS.S3();
-                    awsReady = true;
-                    console.log('✅ AWS services initialized successfully');
-                    return true;
+                    // Fallback to Vercel environment (skip if file doesn't exist)
+                    try {
+                        const envResponse = await fetch('/js/env.js');
+                        if (!envResponse.ok) throw new Error('env.js not found');
+                        
+                        const envScript = await envResponse.text();
+                        eval(envScript);
+                        
+                        if (!window.ENV || !window.ENV.accessKeyId || !window.ENV.secretAccessKey) {
+                            throw new Error('AWS credentials not available');
+                        }
+                        
+                        AWS.config.update({
+                            region: 'us-east-1',
+                            accessKeyId: window.ENV.accessKeyId,
+                            secretAccessKey: window.ENV.secretAccessKey
+                        });
+                        
+                        dynamodb = new AWS.DynamoDB.DocumentClient();
+                        s3 = new AWS.S3();
+                        awsReady = true;
+                        console.log('✅ AWS services initialized successfully');
+                        return true;
+                    } catch (envError) {
+                        console.log('⚠️ No Vercel environment found, using localStorage fallback');
+                        return false;
+                    }
                 } catch (error) {
                     console.error('❌ AWS initialization failed:', error);
                     return false;
