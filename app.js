@@ -473,7 +473,7 @@ createApp({
         async waitForAWS() {
             // Wait up to 10 seconds for AWS to initialize
             for (let i = 0; i < 20; i++) {
-                if (window.awsReady || (window.dynamodb && window.s3)) {
+                if (window.awsReady === true || (window.dynamodb && window.s3)) {
                     console.log('✅ AWS ready for data loading');
                     return;
                 }

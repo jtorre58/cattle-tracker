@@ -1080,9 +1080,12 @@ Toro1, Compra, Reproductor, M, T, 12/2022, N</pre>
                         console.log('🔨 Creating S3 client...');
                         s3 = new AWS.S3();
                         awsReady = true;
+                        
+                        // Set on window object for Vue app to detect
                         window.dynamodb = dynamodb;
                         window.s3 = s3;
                         window.awsReady = awsReady;
+                        
                         console.log('✅ AWS services initialized with local config');
                         return true;
                     }
